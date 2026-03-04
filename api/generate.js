@@ -1,4 +1,4 @@
-const formidable = require('formidable');
+const form = new formidable.IncomingForm({ maxFileSize: 10 * 1024 * 1024 });
 const fs = require('fs');
 const path = require('path');
 
