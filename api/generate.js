@@ -11,53 +11,64 @@ module.exports = async function handler(req, res) {
 
   try {
     const form = new formidable.IncomingForm({ maxFileSize: 10 * 1024 * 1024 });
-    
+
     const [fields, files] = await new Promise((resolve, reject) => {
-      form.parse(req, (err, fields, files) => {
+      form.parse(req, (err, f, fi) => {
         if (err) reject(err);
-        else resolve([fields, files]);
+        else resolve([f, fi]);
       });
     });
 
-    const notes = fields.notes?.[0] || fields.notes || '';
-    const lang = fields.lang?.[0] || fields.lang || 'es';
+    // formidable v3 returns arrays — handle both v2 and v3
+    const notesRaw = fields.notes;
+    const notes = Array.isArray(notesRaw) ? (notesRaw[0] || '') : (String(notesRaw || ''));
+    const langRaw = fields.lang;
+    const lang = Array.isArray(langRaw) ? (langRaw[0] || 'es') : (String(langRaw || 'es'));
     const isEs = lang === 'es';
 
+    // Read file
     let cvText = '';
-    const file = files.cv?.[0] || files.cv;
-    
+    const fileRaw = files.cv;
+    const file = Array.isArray(fileRaw) ? fileRaw[0] : fileRaw;
+
     if (file) {
       const filePath = file.filepath;
       const fileName = file.originalFilename || '';
       const ext = path.extname(fileName).toLowerCase();
-      
+
       if (ext === '.pdf') {
         try {
           const pdfParse = require('pdf-parse');
-          const dataBuffer = fs.readFileSync(filePath);
-          const pdfData = await pdfParse(dataBuffer);
-          cvText = pdfData.text;
-        } catch(e) {
-          cvText = `[PDF: ${fileName}]`;
+          const buf = fs.readFileSync(filePath);
+          const parsed = await pdfParse(buf);
+          cvText = parsed.text || '';
+        } catch (e) {
+          cvText = '';
         }
       } else if (ext === '.docx' || ext === '.doc') {
         try {
           const mammoth = require('mammoth');
           const result = await mammoth.extractRawText({ path: filePath });
-          cvText = result.value;
-        } catch(e) {
-          cvText = fs.readFileSync(filePath, 'utf8').replace(/[^\x20-\x7E\n\r\t]/g, ' ');
+          cvText = result.value || '';
+        } catch (e) {
+          try { cvText = fs.readFileSync(filePath, 'utf8'); } catch(e2) { cvText = ''; }
         }
       } else {
-        cvText = fs.readFileSync(filePath, 'utf8');
+        try { cvText = fs.readFileSync(filePath, 'utf8'); } catch(e) { cvText = ''; }
       }
     }
 
-    if (!cvText || cvText.trim().length < 50) {
+    if (!cvText || cvText.trim().length < 30) {
       return res.status(400).json({ error: 'No se pudo leer el CV. Intentá con otro formato.' });
     }
 
-    const prompt = `Sos un recruiter senior de HWG Talent Consultants. Analizá el siguiente CV.\n\nCV:\n---\n${cvText.slice(0, 8000)}\n---\n${notes.trim() ? `\nNOTAS:\n---\n${notes}\n---` : ''}\n\nRespondé ÚNICAMENTE con JSON válido (sin markdown):\n{"name":"string","role":"string","location":"string","modality":"string","snapshot":{"techFit":"string","exp":"string","cult":"string","lang":"string","avail":"[COMPLETAR]","salary":"[COMPLETAR]"},"tools":[{"tool":"string","years":"string","level":"string"}],"why":"string"}\n\nREGLAS: tools 4-6 items. Si no está usar [COMPLETAR]. ${isEs ? 'Todo en español' : 'Everything in English'}. Solo JSON.`;
+    const notesBlock = notes.trim().length > 0
+      ? '\nNOTAS DEL RECRUITER:\n---\n' + notes.trim() + '\n---'
+      : '';
+
+    const lang_instruction = isEs ? 'Todo en español.' : 'Everything in English.';
+
+    const prompt = 'Sos un recruiter senior de HWG Talent Consultants. Analizá el siguiente CV y extraé la información.\n\nCV:\n---\n' + cvText.slice(0, 8000) + '\n---\n' + notesBlock + '\n\nRespondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), con esta estructura exacta:\n{"name":"string","role":"string","location":"string","modality":"string","snapshot":{"techFit":"string","exp":"string","cult":"string","lang":"string","avail":"[COMPLETAR]","salary":"[COMPLETAR]"},"tools":[{"tool":"string","years":"string","level":"string"}],"why":"string"}\n\nREGLAS: tools entre 4 y 6 items. Si algo no está en el CV usá [COMPLETAR]. ' + lang_instruction + ' Solo JSON, nada más.';
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -77,6 +88,6 @@ module.exports = async function handler(req, res) {
     res.status(200).json(data);
 
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: e.message || 'Error interno' });
   }
 };
