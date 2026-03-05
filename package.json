@@ -1,0 +1,11 @@
+{
+  "name": "hwg-candidate-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "formidable": "^3.5.1",
+    "mammoth": "^1.6.0",
+    "pdf-parse": "^1.1.1",
+    "docx": "^8.5.0",
+    "nodemailer": "^6.9.0"
+  }
+}
