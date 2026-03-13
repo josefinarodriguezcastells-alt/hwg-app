@@ -119,7 +119,7 @@
               <div style={{fontSize:26,fontWeight:800,fontFamily:"'DM Serif Display',serif",lineHeight:1.2}}>{data.name}</div>
               <div style={{color:'#888',fontSize:14,marginTop:4}}>{data.role} · {data.location} · {data.modality}</div>
             </div>
-  <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
               <button onClick={downloadWord} style={{padding:'9px 18px',background:'#0F0F0F',border:'none',color:'#C8F135',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'DM Sans,sans-serif',whiteSpace:'nowrap'}}>
                 ⬇ Descargar Word
               </button>
@@ -192,10 +192,10 @@
     }
 
     function App() {
+      const params = new URLSearchParams(window.location.search);
       const [lang, setLang] = useState('es');
       const [file, setFile] = useState(null);
       const [fileText, setFileText] = useState('');
-      const params = new URLSearchParams(window.location.search);
       const [notes, setNotes] = useState(params.get('notes')||'');
       const [position, setPosition] = useState(params.get('position')||'');
       const [interview, setInterview] = useState(null);
@@ -276,7 +276,6 @@
 
       return (
         <div style={{minHeight:'100vh',background:'#F9F6F1'}}>
-          {/* Header */}
           <div style={{background:'#0F0F0F',padding:'18px 40px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <div style={{fontFamily:"'DM Serif Display',serif",fontWeight:700,fontSize:22,color:'#fff'}}>
               <span style={{color:'#C8F135'}}>HWG</span> Talent Consultants
@@ -284,7 +283,6 @@
             <div style={{color:'#666',fontSize:13}}>CV → Presentación</div>
           </div>
 
-          {/* Main */}
           <div style={{maxWidth:760,margin:'0 auto',padding:'48px 24px 80px'}}>
             <div style={{fontFamily:"'DM Serif Display',serif",fontSize:'clamp(28px,5vw,40px)',fontWeight:800,lineHeight:1.1,marginBottom:12}}>
               CV → Presentación<br/><span style={{color:'#6C3BFF'}}>en 10 segundos.</span>
@@ -293,7 +291,13 @@
               Subí el CV, elegí el idioma, y la presentación HWG sale lista.
             </div>
 
-            {/* Lang */}
+            {position && (
+              <div style={{background:'#F0EBFF',border:'1.5px solid #6C3BFF',borderRadius:12,padding:'12px 18px',marginBottom:20,display:'flex',alignItems:'center',gap:10}}>
+                <span style={{fontSize:13,color:'#6C3BFF',fontWeight:700}}>📌 Posición precargada desde el ATS:</span>
+                <span style={{fontSize:13,color:'#374151',fontWeight:600}}>{position}</span>
+              </div>
+            )}
+
             <div style={{background:'#fff',borderRadius:16,padding:28,marginBottom:20,border:'1.5px solid #ebebeb'}}>
               <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#6C3BFF',marginBottom:14}}>Idioma de salida</div>
               <div style={{display:'flex',gap:12}}>
@@ -302,7 +306,6 @@
               </div>
             </div>
 
-            {/* Upload */}
             <div style={{background:'#fff',borderRadius:16,padding:28,marginBottom:20,border:'1.5px solid #ebebeb'}}>
               <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#6C3BFF',marginBottom:14}}>CV</div>
               <div
@@ -320,7 +323,6 @@
                 }
               </div>
 
-              {/* Interview upload */}
               <div style={{marginTop:20}}>
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#999',marginBottom:10}}>
                   Entrevista <span style={{fontWeight:400,textTransform:'none',letterSpacing:0,color:'#bbb'}}>— opcional</span>
@@ -340,7 +342,6 @@
                 </div>
               </div>
 
-              {/* Notes */}
               <div style={{marginTop:20}}>
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#6C3BFF',marginBottom:10}}>
                   Posición para la que se presenta <span style={{fontWeight:400,textTransform:'none',letterSpacing:0,color:'#bbb'}}>— opcional</span>
