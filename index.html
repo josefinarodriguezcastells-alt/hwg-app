@@ -195,8 +195,9 @@
       const [lang, setLang] = useState('es');
       const [file, setFile] = useState(null);
       const [fileText, setFileText] = useState('');
-      const [notes, setNotes] = useState('');
-      const [position, setPosition] = useState('');
+      const params = new URLSearchParams(window.location.search);
+      const [notes, setNotes] = useState(params.get('notes')||'');
+      const [position, setPosition] = useState(params.get('position')||'');
       const [interview, setInterview] = useState(null);
       const [drag, setDrag] = useState(false);
       const [dragInterview, setDragInterview] = useState(false);
