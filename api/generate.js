@@ -25,7 +25,8 @@ module.exports = async function handler(req, res) {
     const lang            = get(fields.lang) || 'es';
     const position        = get(fields.position);
     const jd              = get(fields.jd);
-    const candidateNotes  = get(fields.candidate_notes); // notas generales del candidato
+    const jdNotes         = get(fields.jd_notes); // contexto adicional de la posición
+    const candidateNotes  = get(fields.candidate_notes);
     const isEs            = lang === 'es';
 
     // ── Helper: extract text from a file ─────────────────────────────────────
@@ -115,6 +116,11 @@ ${jd ? `3. JOB DESCRIPTION — criterio de evaluación:
 ---
 ${jd.slice(0, 2500)}
 ---` : '3. JOB DESCRIPTION — NO HAY. Evaluá en base al rol mencionado.'}
+
+${jdNotes ? `4. CONTEXTO ADICIONAL DE LA POSICIÓN — misma importancia que la JD. Cultura del cliente, requisitos no escritos, lo que dijo el hiring manager:
+---
+${jdNotes.slice(0, 2000)}
+---` : ''}
 
 ${position ? `POSICIÓN: ${position}` : ''}
 
