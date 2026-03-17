@@ -16,8 +16,8 @@ module.exports = async function handler(req, res) {
     const today = new Date().toLocaleDateString(isEs ? 'es-AR' : 'en-US', {day:'2-digit', month:'long', year:'numeric'});
 
     const labels = isEs
-      ? { techFit:'Fit técnico', exp:'Experiencia', cult:'Culture fit', lang:'Idiomas', avail:'Disponibilidad', salary:'Pretensión salarial', tools:'Tools & Herramientas', tool:'Herramienta', years:'Años', level:'Nivel & contexto', why:'El candidato/a en 3 líneas', snapshot:'Quick Snapshot' }
-      : { techFit:'Technical fit', exp:'Experience', cult:'Culture fit', lang:'Languages', avail:'Availability', salary:'Salary expectation', tools:'Tools & Stack', tool:'Tool', years:'Years', level:'Level & context', why:'The candidate in 3 lines', snapshot:'Quick Snapshot' };
+      ? { techFit:'Fit técnico', exp:'Experiencia', cult:'Culture fit', lang:'Idiomas', avail:'Disponibilidad', salary:'Pretensión salarial', tools:'Tools & Herramientas', tool:'Herramienta', years:'Años', level:'Nivel & contexto', why:'El candidato/a en 3 líneas', snapshot:'Quick Snapshot', gap:'Gap Analysis', extraNotes:'Notas del recruiter' }
+      : { techFit:'Technical fit', exp:'Experience', cult:'Culture fit', lang:'Languages', avail:'Availability', salary:'Salary expectation', tools:'Tools & Stack', tool:'Tool', years:'Years', level:'Level & context', why:'The candidate in 3 lines', snapshot:'Quick Snapshot', gap:'Gap Analysis', extraNotes:'Recruiter notes' };
 
     const VIOLET = '6C3BFF';
     const LIME = 'C8F135';
@@ -26,6 +26,8 @@ module.exports = async function handler(req, res) {
     const DARK = '374151';
     const LIGHT = 'F5F3FF';
     const WHY_BG = 'F9F6F1';
+    const GAP_BG = 'FFFBEB';
+    const GAP_BORDER = 'D97706';
 
     const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
     const thinBottom = { style: BorderStyle.SINGLE, size: 4, color: 'E5E7EB' };
@@ -39,16 +41,16 @@ module.exports = async function handler(req, res) {
     });
 
     const snapshotData = [
-      [labels.techFit, data.snapshot.techFit],
-      [labels.exp, data.snapshot.exp],
-      [labels.cult, data.snapshot.cult],
-      [labels.lang, data.snapshot.lang],
-      [labels.avail, data.snapshot.avail],
-      [labels.salary, data.snapshot.salary],
+      [labels.techFit, data.snapshot?.techFit || '[COMPLETAR]'],
+      [labels.exp,     data.snapshot?.exp     || '[COMPLETAR]'],
+      [labels.cult,    data.snapshot?.cult     || '[COMPLETAR]'],
+      [labels.lang,    data.snapshot?.lang     || '[COMPLETAR]'],
+      [labels.avail,   data.snapshot?.avail    || '[COMPLETAR]'],
+      [labels.salary,  data.snapshot?.salary   || '[COMPLETAR]'],
     ];
 
     const snapshotRows = snapshotData.map(([label, value]) => {
-      const isDone = !value.includes('[COMPLETAR]');
+      const isDone = !String(value).includes('[COMPLETAR]');
       return new TableRow({ children: [
         new TableCell({
           width: { size: 400, type: WidthType.DXA },
@@ -66,7 +68,7 @@ module.exports = async function handler(req, res) {
           width: { size: 6360, type: WidthType.DXA },
           borders: { top: noBorder, left: noBorder, right: noBorder, bottom: thinBottom },
           margins: { top: 170, bottom: 170, left: 60, right: 60 },
-          children: [new Paragraph({ children: [new TextRun({ text: value, font: 'Arial', size: 22, color: BLACK })] })]
+          children: [new Paragraph({ children: [new TextRun({ text: String(value), font: 'Arial', size: 22, color: BLACK })] })]
         }),
       ]});
     });
@@ -92,7 +94,7 @@ module.exports = async function handler(req, res) {
       }),
     ]});
 
-    const toolRows = data.tools.map((tool, i) => new TableRow({ children: [
+    const toolRows = (data.tools || []).map((tool, i) => new TableRow({ children: [
       new TableCell({
         width: { size: 5400, type: WidthType.DXA },
         shading: { fill: i % 2 === 0 ? LIGHT : 'FFFFFF', type: ShadingType.CLEAR },
@@ -116,6 +118,17 @@ module.exports = async function handler(req, res) {
       }),
     ]}));
 
+    // Personal info rows — now includes salary and availability
+    const personalRows = [
+      [isEs ? 'Posición'              : 'Position',          data.personal?.position     || '[COMPLETAR]'],
+      [isEs ? 'Fecha de presentación' : 'Presentation date', today],
+      ['LinkedIn',                                            data.personal?.linkedin     || '[COMPLETAR]'],
+      [isEs ? 'Teléfono'              : 'Phone',             data.personal?.phone        || '[COMPLETAR]'],
+      ['Mail',                                                data.personal?.email        || '[COMPLETAR]'],
+      [isEs ? 'Salario pretendido'    : 'Salary expectation',data.personal?.salary       || data.snapshot?.salary || '[COMPLETAR]'],
+      [isEs ? 'Disponibilidad'        : 'Availability',      data.personal?.availability || data.snapshot?.avail  || '[COMPLETAR]'],
+    ];
+
     const doc = new Document({
       sections: [{
         properties: {
@@ -138,18 +151,12 @@ module.exports = async function handler(req, res) {
 
           // PERSONAL INFORMATION
           sectionLabel(isEs ? 'INFORMACIÓN PERSONAL' : 'PERSONAL INFORMATION'),
-          ...[ 
-            [isEs ? 'Posición' : 'Position', data.personal?.position || '[COMPLETAR]'],
-            [isEs ? 'Fecha de presentación' : 'Presentation date', today],
-            ['LinkedIn', data.personal?.linkedin || '[COMPLETAR]'],
-            [isEs ? 'Teléfono' : 'Phone', data.personal?.phone || '[COMPLETAR]'],
-            ['Mail', data.personal?.email || '[COMPLETAR]'],
-          ].map(([label, value]) => new Paragraph({
+          ...personalRows.map(([label, value]) => new Paragraph({
             spacing: { before: 0, after: 0 },
             border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'E5E7EB' } },
             children: [
               new TextRun({ text: `${label}:  `, font: 'Arial', size: 22, bold: true, color: BLACK }),
-              new TextRun({ text: value, font: 'Arial', size: 22, color: value === '[COMPLETAR]' ? GRAY : BLACK }),
+              new TextRun({ text: String(value), font: 'Arial', size: 22, color: String(value) === '[COMPLETAR]' ? GRAY : BLACK }),
             ]
           })),
 
@@ -169,15 +176,32 @@ module.exports = async function handler(req, res) {
             rows: [toolsHeaderRow, ...toolRows]
           }),
 
-          // WHY
+          // WHY / STORYTELLING
           sectionLabel(labels.why.toUpperCase()),
           new Paragraph({
-            spacing: { before: 60, after: 460 },
+            spacing: { before: 60, after: 200 },
             border: { left: { style: BorderStyle.SINGLE, size: 24, color: LIME } },
             shading: { fill: WHY_BG, type: ShadingType.CLEAR },
             indent: { left: 140 },
-            children: [new TextRun({ text: data.why, font: 'Arial', size: 22, italics: true, color: DARK })]
+            children: [new TextRun({ text: data.why || data.storytelling || '', font: 'Arial', size: 22, italics: true, color: DARK })]
           }),
+
+          // GAP ANALYSIS
+          ...(data.gap ? [
+            sectionLabel(labels.gap.toUpperCase()),
+            new Paragraph({
+              spacing: { before: 60, after: 200 },
+              border: {
+                left: { style: BorderStyle.SINGLE, size: 24, color: GAP_BORDER },
+                top: { style: BorderStyle.SINGLE, size: 4, color: 'FDE68A' },
+                bottom: { style: BorderStyle.SINGLE, size: 4, color: 'FDE68A' },
+                right: { style: BorderStyle.SINGLE, size: 4, color: 'FDE68A' },
+              },
+              shading: { fill: GAP_BG, type: ShadingType.CLEAR },
+              indent: { left: 140 },
+              children: [new TextRun({ text: data.gap, font: 'Arial', size: 22, color: DARK })]
+            }),
+          ] : []),
 
           // Footer
           new Paragraph({
@@ -202,14 +226,9 @@ module.exports = async function handler(req, res) {
       const nodemailer = require('nodemailer');
       const transporter = nodemailer.createTransport({
         service: 'gmail',
-        auth: {
-          user: process.env.GMAIL_USER,
-          pass: process.env.GMAIL_PASS,
-        }
+        auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS }
       });
-
       const recruiterInfo = data.personal?.position ? ` — ${data.personal.position}` : '';
-
       await transporter.sendMail({
         from: `"HWG Form Generator" <${process.env.GMAIL_USER}>`,
         to: process.env.GMAIL_USER,
@@ -230,8 +249,7 @@ module.exports = async function handler(req, res) {
               </table>
               <p style="margin-top:20px;font-size:13px;color:#888;">El documento Word está adjunto a este mail.</p>
             </div>
-          </div>
-        `,
+          </div>`,
         attachments: [{
           filename: `${data.name.replace(/\s+/g, '_')}_HWG.docx`,
           content: buffer,
@@ -240,7 +258,6 @@ module.exports = async function handler(req, res) {
       });
     } catch(mailErr) {
       console.error('Mail error:', mailErr.message);
-      // Don't fail the request if email fails
     }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
