@@ -54,14 +54,15 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'No se pudo leer el CV. Probá con otro formato.' });
     }
 
-    // ── Read additional docs (interview, extra_0, extra_1, ...) ──────────────
-    const extraSections = [];
+    // ── Separate interview notes from other docs ──────────────────────────────
+    const interviewSections = [];
+    const otherSections = [];
 
     // Legacy single interview file
     const interviewFile = files.interview?.[0] || files.interview;
     if (interviewFile) {
       const t = await extractText(interviewFile);
-      if (t) extraSections.push(`NOTAS DE ENTREVISTA:\n${t.slice(0, 3000)}`);
+      if (t) interviewSections.push(t.slice(0, 3000));
     }
 
     // Multiple extra docs sent as extra_0, extra_1, extra_2...
@@ -70,43 +71,69 @@ module.exports = async function handler(req, res) {
       const f = files[`extra_${i}`]?.[0] || files[`extra_${i}`];
       const label = get(fields[`extra_${i}_label`]) || `Documento adicional ${i + 1}`;
       const t = await extractText(f);
-      if (t) extraSections.push(`${label.toUpperCase()}:\n${t.slice(0, 2000)}`);
+      if (t) {
+        // interview_notes go to primary source, others go to context
+        if (label.toLowerCase().includes('interview') || label.toLowerCase().includes('entrevista') || label.toLowerCase().includes('notas')) {
+          interviewSections.push(t.slice(0, 3000));
+        } else {
+          otherSections.push(`${label.toUpperCase()}:\n${t.slice(0, 1500)}`);
+        }
+      }
       i++;
     }
 
+    // Combine all interview notes — text from modal + files
+    const allInterviewNotes = [
+      candidateNotes || '',
+      notes || '',
+      ...interviewSections,
+    ].filter(Boolean).join('\n\n---\n\n');
+
+    const hasInterviewNotes = allInterviewNotes.trim().length > 20;
+    const otherDocsBlock = otherSections.length ? `\nDOCUMENTOS ADICIONALES:\n${otherSections.join('\n---\n')}\n` : '';
+
     // ── Build prompt ──────────────────────────────────────────────────────────
-    const extraBlock = extraSections.length
-      ? `\n${extraSections.join('\n---\n')}\n`
-      : '';
+    const prompt = `Sos un recruiter senior de HWG Talent Consultants preparando una presentación para un cliente.
 
-    const prompt = `Sos un recruiter senior de HWG Talent Consultants. Tu trabajo es evaluar con HONESTIDAD y criterio riguroso si un candidato es apto para una posición.
+CONTEXTO: El cliente va a leer MUCHOS reportes. Si todos suenan igual, perdemos credibilidad. Cada reporte tiene que reflejar a ESA persona específica, con sus palabras, su historia, sus motivaciones reales.
 
-IMPORTANTE: NO sos un vendedor. Tu evaluación tiene que ser objetiva y útil para el cliente que va a tomar la decisión de entrevistar o no. Si el candidato no tiene experiencia en el área requerida, decilo claramente. Si hay un cambio de carrera o gaps importantes, son el dato más valioso.
+FUENTES DE INFORMACIÓN (en orden de importancia):
+${hasInterviewNotes ? `
+1. NOTAS DE ENTREVISTA — esta es tu fuente principal. Usá lo que el candidato dijo, cómo lo dijo, qué lo motiva, qué busca. El storytelling tiene que reflejar la entrevista, no el CV.
+---
+${allInterviewNotes.slice(0, 6000)}
+---` : `
+1. NOTAS DE ENTREVISTA — NO HAY. El reporte debe basarse solo en el CV. Aclaralo en el storytelling: "Nota: este perfil fue generado sin entrevista previa."
+`}
+
+2. CV DEL CANDIDATO — para historial, herramientas y trayectoria:
+---
+${cvText.slice(0, 5000)}
+---
+${otherDocsBlock}
+${jd ? `3. JOB DESCRIPTION — criterio de evaluación:
+---
+${jd.slice(0, 2500)}
+---` : '3. JOB DESCRIPTION — NO HAY. Evaluá en base al rol mencionado.'}
 
 ${position ? `POSICIÓN: ${position}` : ''}
-${jd ? `\nJOB DESCRIPTION:\n---\n${jd.slice(0, 3000)}\n---` : ''}
 
-CV DEL CANDIDATO:
----
-${cvText.slice(0, 6000)}
----
-${extraBlock}
-${candidateNotes ? `NOTAS GENERALES DEL CANDIDATO (contexto del recruiter):\n---\n${candidateNotes.slice(0, 1500)}\n---\n` : ''}
-${notes ? `NOTAS DE PRESENTACIÓN (salario, disponibilidad, contexto adicional):\n---\n${notes}\n---` : ''}
-
-INSTRUCCIONES:
-- techFit: número HONESTO del 1 al 10.
-- tools: SOLO herramientas que el candidato realmente usa según su CV. No inventes.
-- experience: array con TODA la trayectoria laboral real del candidato extraída del CV. Máximo 6 entradas, ordenadas de más reciente a más antigua. Cada entrada: role, company, period (ej: "2019 — 2023 · 4 años"). No omitas trabajos relevantes.
-- englishLevel: nivel de inglés real según CV. Si no se menciona: "No especificado". Valores posibles: "Nativo", "Avanzado (C1/C2)", "Intermedio (B1/B2)", "Básico (A1/A2)", "No especificado", "No requerido para el rol".
-- storytelling: análisis honesto de 4 a 6 líneas. Si hay cambio de área o falta técnica, mencionalo. No exageres el fit.
-- gap: array de exactamente 2 a 3 objetos. Cada uno: {"title":"string corto","detail":"string explicativo"}. Gaps reales y concretos entre el perfil y la posición.
-- recommendation: "Recomendado/a para entrevistar" | "Perfil a evaluar con cautela" | "No recomendado/a para esta posición". Sé honesto.
-- Si algo no está en el CV usá [COMPLETAR].
+INSTRUCCIONES CRÍTICAS:
+- techFit: número HONESTO del 1 al 10 comparando el CV contra la JD. Si no hay JD, evaluá contra el rol. Un candidato sin experiencia técnica relevante puede ser 3 o 4.
+- cult: culture fit basado en lo que dijiste en la entrevista sobre motivaciones, forma de trabajar, valores. Si no hay entrevista: "[Sin datos de entrevista]".
+- tools: SOLO herramientas que aparecen explícitamente en el CV. Cero invenciones. Para cada tool: "tool" es el nombre, "years" solo si el CV menciona explícitamente los años de experiencia con esa herramienta — si no está claro, dejá years como string vacío "". NUNCA pongas nivel (junior/intermedio/avanzado) — ese campo no existe.
+- experience: los 4 trabajos más recientes del CV, de más reciente a más antiguo.
+- englishLevel: nivel real según CV o lo mencionado en entrevista. Si no se sabe: "No especificado".
+- storytelling: 4 a 6 líneas ÚNICAS para este candidato. Si hay notas de entrevista, usá frases o conceptos que el candidato mencionó. PROHIBIDO usar frases genéricas como "sólida trayectoria", "perfil versátil", "orientado a resultados". Si el perfil no es bueno para el rol, decilo con claridad y sin vueltas.
+- gap: 2 a 3 gaps REALES y ESPECÍFICOS entre este candidato y esta posición. No inventes gaps pero tampoco los suavices.
+- recommendation: elegí con criterio real.
+  * "Recomendado/a para entrevistar" → solo si techFit ≥ 7 Y los gaps son menores
+  * "Perfil a evaluar con cautela" → techFit entre 5 y 6, o gaps importantes pero salvables
+  * "No recomendado/a para esta posición" → techFit ≤ 4, o gaps estructurales que no se pueden superar
 - ${isEs ? 'Toda la respuesta en español.' : 'Everything in English.'}
 
 Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), con esta estructura exacta:
-{"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","englishLevel":"string"},"tools":[{"tool":"string","years":"string","level":"string"}],"experience":[{"role":"string","company":"string","period":"string"}],"storytelling":"string","gap":[{"title":"string","detail":"string"}],"recommendation":"string"}`;
+{"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","englishLevel":"string"},"tools":[{"tool":"string","years":"string"}],"experience":[{"role":"string","company":"string","period":"string"}],"storytelling":"string","gap":[{"title":"string","detail":"string"}],"recommendation":"string"}`;
 
     // ── Call Claude ───────────────────────────────────────────────────────────
     const response = await fetch('https://api.anthropic.com/v1/messages', {
