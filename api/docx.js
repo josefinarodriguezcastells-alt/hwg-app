@@ -194,7 +194,6 @@ module.exports = async function handler(req, res) {
             children: [
               txt(tool.tool || '', { size: 20, bold: true, color: VIOLET }),
               ...(tool.years ? [txt(`  ${tool.years}y`, { size: 18, color: GRAY })] : []),
-              ...(tool.level ? [txt(`  ·  ${tool.level}`, { size: 18, color: GRAY })] : []),
             ]
           })]
         }));
