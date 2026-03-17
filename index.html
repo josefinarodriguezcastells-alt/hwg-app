@@ -957,6 +957,15 @@ function PresentarModal({ app, position, candidate, cvUrl, onClose }) {
             <div style={{background:'var(--v-light)',border:'1px solid #ddd6fe',borderRadius:8,padding:16,marginBottom:16}}>
               <div style={{fontSize:10,letterSpacing:2,textTransform:'uppercase',color:'var(--v)',fontWeight:600,marginBottom:12}}>Resultado generado</div>
 
+              {result.recommendation && (
+                <div style={{marginBottom:12,padding:'6px 12px',borderRadius:4,display:'inline-block',
+                  background: result.recommendation.includes('No recom') ? 'var(--danger-bg)' : result.recommendation.includes('cautela') ? 'var(--warning-bg)' : 'var(--v-light)',
+                  color: result.recommendation.includes('No recom') ? 'var(--danger)' : result.recommendation.includes('cautela') ? 'var(--warning)' : 'var(--v)',
+                  fontSize:11,fontWeight:600}}>
+                  {result.recommendation}
+                </div>
+              )}
+
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
                 {[
                   ['Nombre', result.name],
@@ -1007,10 +1016,19 @@ function PresentarModal({ app, position, candidate, cvUrl, onClose }) {
                 </div>
               )}
 
-              {result.gap && (
+              {result.gap && result.gap.length > 0 && (
                 <div style={{marginBottom:12}}>
                   <div style={{fontSize:9,letterSpacing:2,textTransform:'uppercase',color:'var(--warning)',marginBottom:6}}>Gap analysis</div>
-                  <div style={{fontSize:12,color:'var(--text)',lineHeight:1.7,background:'#fffbeb',padding:12,borderRadius:6,border:'1px solid #fde68a'}}>{result.gap}</div>
+                  <div style={{background:'#fffbeb',padding:12,borderRadius:6,border:'1px solid #fde68a'}}>
+                    {Array.isArray(result.gap)
+                      ? result.gap.map((g,i)=>(
+                          <div key={i} style={{fontSize:12,color:'var(--text)',lineHeight:1.6,marginBottom:i<result.gap.length-1?8:0}}>
+                            <strong style={{color:'var(--warning)'}}>{g.title}:</strong> {g.detail}
+                          </div>
+                        ))
+                      : <div style={{fontSize:12,color:'var(--text)',lineHeight:1.7}}>{result.gap}</div>
+                    }
+                  </div>
                 </div>
               )}
 
