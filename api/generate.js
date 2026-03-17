@@ -95,15 +95,18 @@ ${candidateNotes ? `NOTAS GENERALES DEL CANDIDATO (contexto del recruiter):\n---
 ${notes ? `NOTAS DE PRESENTACIÓN (salario, disponibilidad, contexto adicional):\n---\n${notes}\n---` : ''}
 
 INSTRUCCIONES:
-- techFit: número HONESTO del 1 al 10. Si el candidato no tiene experiencia técnica relevante para la posición puede ser 2 o 3.
-- tools: SOLO las herramientas que el candidato realmente usa según su CV. Si no usa herramientas de AI y la posición las requiere, no las inventes.
-- storytelling: análisis honesto de 5 a 10 líneas. Si hay un cambio de área o falta experiencia técnica, mencionalo. Si hay aspectos transferibles valiosos, destacalos. No exageres el fit.
-- gap: análisis claro de los gaps entre el perfil y los requisitos de la posición. Si el candidato no tiene experiencia en el área core, ese es el gap principal. Máximo 3 puntos concretos.
+- techFit: número HONESTO del 1 al 10.
+- tools: SOLO herramientas que el candidato realmente usa según su CV. No inventes.
+- experience: array con la trayectoria laboral real del candidato extraída del CV. Máximo 4 entradas, ordenadas de más reciente a más antigua. Cada entrada: role, company, period (ej: "2019 — 2023 · 4 años").
+- englishLevel: nivel de inglés real según CV. Si no se menciona: "No especificado". Valores posibles: "Nativo", "Avanzado (C1/C2)", "Intermedio (B1/B2)", "Básico (A1/A2)", "No especificado", "No requerido para el rol".
+- storytelling: análisis honesto de 4 a 6 líneas. Si hay cambio de área o falta técnica, mencionalo. No exageres el fit.
+- gap: array de exactamente 2 a 3 objetos. Cada uno: {"title":"string corto","detail":"string explicativo"}. Gaps reales y concretos entre el perfil y la posición.
+- recommendation: "Recomendado/a para entrevistar" | "Perfil a evaluar con cautela" | "No recomendado/a para esta posición". Sé honesto.
 - Si algo no está en el CV usá [COMPLETAR].
 - ${isEs ? 'Toda la respuesta en español.' : 'Everything in English.'}
 
 Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), con esta estructura exacta:
-{"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","lang":"string","avail":"string","salary":"string"},"tools":[{"tool":"string","years":"string","level":"string"}],"storytelling":"string","gap":"string"}`;
+{"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","englishLevel":"string"},"tools":[{"tool":"string","years":"string","level":"string"}],"experience":[{"role":"string","company":"string","period":"string"}],"storytelling":"string","gap":[{"title":"string","detail":"string"}],"recommendation":"string"}`;
 
     // ── Call Claude ───────────────────────────────────────────────────────────
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -115,7 +118,7 @@ Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), c
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
+        max_tokens: 2500,
         messages: [{ role: 'user', content: prompt }]
       })
     });
