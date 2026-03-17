@@ -37,12 +37,16 @@ module.exports = async function handler(req, res) {
         cvText = fs.readFileSync(filePath, 'utf8');
       }
     } catch(e) {
-      return res.status(200).json({ name: null, email: null, phone: null, linkedin_url: null });
+      console.log('extract-profile: failed to read file:', e.message);
+      return res.status(200).json({ name: null, email: null, phone: null, linkedin_url: null, location: null });
     }
 
     if (!cvText || cvText.trim().length < 20) {
-      return res.status(200).json({ name: null, email: null, phone: null, linkedin_url: null });
+      console.log('extract-profile: text too short or empty, length:', cvText?.length);
+      return res.status(200).json({ name: null, email: null, phone: null, linkedin_url: null, location: null });
     }
+
+    console.log('extract-profile: extracted text sample:', cvText.slice(0, 300));
 
     // Ask Claude to extract personal data
     const prompt = `Extraé los datos personales de este CV. Respondé ÚNICAMENTE con JSON válido, sin markdown ni explicaciones.
