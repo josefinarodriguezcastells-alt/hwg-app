@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const form = new formidable.IncomingForm({ maxFileSize: 10 * 1024 * 1024 });
-    
+
     const [fields, files] = await new Promise((resolve, reject) => {
       form.parse(req, (err, fields, files) => {
         if (err) reject(err);
@@ -19,35 +19,31 @@ module.exports = async function handler(req, res) {
       });
     });
 
-    const notesRaw = fields.notes;
-    const notes = Array.isArray(notesRaw) ? (notesRaw[0] || '') : String(notesRaw || '');
-    const langRaw = fields.lang;
-    const lang = Array.isArray(langRaw) ? (langRaw[0] || 'es') : String(langRaw || 'es');
-    const positionRaw = fields.position;
-    const position = Array.isArray(positionRaw) ? (positionRaw[0] || '') : String(positionRaw || '');
-    const isEs = lang === 'es';
+    const get = (f) => Array.isArray(f) ? (f[0] || '') : String(f || '');
 
-    // Read file content
+    const notes    = get(fields.notes);
+    const lang     = get(fields.lang) || 'es';
+    const position = get(fields.position);
+    const jd       = get(fields.jd);
+    const isEs     = lang === 'es';
+
+    // ── Read CV ──────────────────────────────────────────────────────────────
     let cvText = '';
     const file = files.cv?.[0] || files.cv;
-    
+
     if (file) {
       const filePath = file.filepath;
-      const fileName = file.originalFilename || '';
-      const ext = path.extname(fileName).toLowerCase();
-      
+      const ext = path.extname(file.originalFilename || '').toLowerCase();
+
       if (ext === '.pdf') {
-        // Use pdf-parse for PDFs
         try {
           const pdfParse = require('pdf-parse');
-          const dataBuffer = fs.readFileSync(filePath);
-          const pdfData = await pdfParse(dataBuffer);
+          const pdfData = await pdfParse(fs.readFileSync(filePath));
           cvText = pdfData.text;
         } catch(e) {
-          cvText = `[PDF: ${fileName} - no se pudo extraer texto]`;
+          cvText = `[PDF no legible: ${file.originalFilename}]`;
         }
       } else if (ext === '.docx' || ext === '.doc') {
-        // Use mammoth for Word docs
         try {
           const mammoth = require('mammoth');
           const result = await mammoth.extractRawText({ path: filePath });
@@ -56,23 +52,20 @@ module.exports = async function handler(req, res) {
           cvText = fs.readFileSync(filePath, 'utf8').replace(/[^\x20-\x7E\n\r\t]/g, ' ');
         }
       } else {
-        // Plain text
         cvText = fs.readFileSync(filePath, 'utf8');
       }
     }
 
-    // Read interview file if provided
+    // ── Read interview/notes file ─────────────────────────────────────────────
     let interviewText = '';
-    const interviewRaw = files.interview;
-    const interviewFile = Array.isArray(interviewRaw) ? interviewRaw[0] : interviewRaw;
+    const interviewFile = files.interview?.[0] || files.interview;
     if (interviewFile) {
       const iPath = interviewFile.filepath;
       const iExt = path.extname(interviewFile.originalFilename || '').toLowerCase();
       try {
         if (iExt === '.pdf') {
           const pdfParse = require('pdf-parse');
-          const parsed = await pdfParse(fs.readFileSync(iPath));
-          interviewText = parsed.text || '';
+          interviewText = (await pdfParse(fs.readFileSync(iPath))).text || '';
         } else if (iExt === '.docx' || iExt === '.doc') {
           const mammoth = require('mammoth');
           interviewText = (await mammoth.extractRawText({ path: iPath })).value || '';
@@ -82,28 +75,37 @@ module.exports = async function handler(req, res) {
       } catch(e) { interviewText = ''; }
     }
 
-    if (!cvText || cvText.trim().length < 50) {
-      return res.status(400).json({ error: 'No se pudo leer el contenido del CV. Intentá con otro formato.' });
+    if (!cvText || cvText.trim().length < 30) {
+      return res.status(400).json({ error: 'No se pudo leer el CV. Probá con otro formato.' });
     }
 
-    const positionBlock = position.trim()
-      ? `\nPOSICIÓN OBJETIVO: ${position.trim()}\nIMPORTANTE: Toda la presentación debe estar orientada a esta posición. Destacá las skills, experiencia y logros más relevantes para este rol específico. El fit técnico, culture fit, tools y el resumen final deben reflejar por qué este candidato es ideal para ESTA posición.\n`
-      : '';
+    // ── Build prompt ──────────────────────────────────────────────────────────
+    const prompt = `Sos un recruiter senior de HWG Talent Consultants. Tu trabajo es evaluar con HONESTIDAD y criterio riguroso si un candidato es apto para una posición.
 
-    const prompt = `Sos un recruiter senior de HWG Talent Consultants. Analizá el siguiente CV y generá una presentación de candidato.
-${positionBlock}
-CV:
+IMPORTANTE: NO sos un vendedor. Tu evaluación tiene que ser objetiva y útil para el cliente que va a tomar la decisión de entrevistar o no. Si el candidato no tiene experiencia en el área requerida, decilo claramente. Si hay un cambio de carrera o gaps importantes, son el dato más valioso.
+
+${position ? `POSICIÓN: ${position}` : ''}
+${jd ? `\nJOB DESCRIPTION:\n---\n${jd.slice(0, 3000)}\n---` : ''}
+
+CV DEL CANDIDATO:
 ---
 ${cvText.slice(0, 6000)}
 ---
-${interviewText.trim() ? `\nENTREVISTA:\n---\n${interviewText.slice(0, 3000)}\n---` : ''}
-${notes.trim() ? `\nNOTAS ADICIONALES:\n---\n${notes}\n---` : ''}
+${interviewText ? `\nNOTAS / TRANSCRIPCIÓN DE ENTREVISTA:\n---\n${interviewText.slice(0, 3000)}\n---` : ''}
+${notes ? `\nNOTAS DEL RECRUITER:\n---\n${notes}\n---` : ''}
+
+INSTRUCCIONES:
+- techFit: número HONESTO del 1 al 10. Si el candidato no tiene experiencia técnica relevante para la posición puede ser 2 o 3.
+- tools: SOLO las herramientas que el candidato realmente usa según su CV. Si no usa herramientas de AI y la posición las requiere, no las inventes.
+- why: análisis honesto de 5 a 10 líneas. Si hay un cambio de área o falta experiencia técnica, mencionalo. Si hay aspectos transferibles valiosos, destacalos. No exageres el fit.
+- gap: análisis claro de los gaps entre el perfil y los requisitos de la posición. Si el candidato no tiene experiencia en el área core, ese es el gap principal. Máximo 3 puntos concretos.
+- Si algo no está en el CV usá [COMPLETAR].
+- ${isEs ? 'Toda la respuesta en español.' : 'Everything in English.'}
 
 Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), con esta estructura exacta:
-{"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","lang":"string","avail":"[COMPLETAR]","salary":"[COMPLETAR]"},"tools":[{"tool":"string","years":"string","level":"string"}],"why":"string"}
+{"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","lang":"string","avail":"string","salary":"string"},"tools":[{"tool":"string","years":"string","level":"string"}],"why":"string","gap":"string"}`;
 
-REGLAS: tools entre 4 y 6 items priorizando las más relevantes para la posición. Si algo no está en el CV ni en la entrevista usá [COMPLETAR]. Para personal.linkedin, personal.phone y personal.email: extraelos del CV si están, si no usá [COMPLETAR]. Si hay entrevista, priorizá disponibilidad y pretensión salarial de ahí. ${isEs ? 'Todo en español.' : 'Everything in English.'} Solo JSON, nada más.`;
-
+    // ── Call Claude ───────────────────────────────────────────────────────────
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -113,7 +115,7 @@ REGLAS: tools entre 4 y 6 items priorizando las más relevantes para la posició
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
+        max_tokens: 1500,
         messages: [{ role: 'user', content: prompt }]
       })
     });
