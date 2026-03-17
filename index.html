@@ -1,388 +1,1718 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HWG Talent — Form Generator</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #F9F6F1; font-family: 'DM Sans', sans-serif; color: #0F0F0F; }
-    :root {
-      --punch: #6C3BFF;
-      --punch-light: #F0EBFF;
-      --lime: #C8F135;
-      --ink: #0F0F0F;
-      --warm: #F9F6F1;
-      --gray: #6B7280;
-      --dark: #374151;
-      --white: #ffffff;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes fadeIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-    .fade-in { animation: fadeIn 0.4s ease forwards; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HWG ATS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f4f8; --sidebar: #ffffff; --card: #ffffff; --border: #e8e6f0;
+  --v: #7c3aed; --v-light: #ede9fe; --v-mid: #a78bfa;
+  --text: #1e1b2e; --muted: #9ca3af; --sub: #6b7280;
+  --lime: #65a30d; --lime-bg: #f0fdf4;
+  --danger: #dc2626; --danger-bg: #fef2f2;
+  --warning: #d97706; --warning-bg: #fffbeb;
+  --black: #1e1b2e;
+}
+body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; }
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); position: relative; }
+.login-wrap::before { content: ''; position: absolute; width: 500px; height: 500px; background: radial-gradient(circle, rgba(124,58,237,0.06) 0%, transparent 70%); top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none; }
+.login-card { background: var(--card); border: 1px solid var(--border); padding: 48px; width: 380px; position: relative; border-radius: 12px; box-shadow: 0 4px 24px rgba(124,58,237,0.08); }
+.login-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--v); border-radius: 12px 12px 0 0; }
+.logo { font-size: 32px; font-weight: 800; letter-spacing: -1px; color: var(--v); margin-bottom: 2px; text-align: center; }
+.logo-sub { font-size: 10px; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 36px; text-align: center; }
+.field-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--sub); margin-bottom: 8px; display: block; }
+.field-input { width: 100%; background: #faf9fc; border: 1px solid var(--border); color: var(--text); padding: 12px 14px; font-family: 'Inter', sans-serif; font-size: 13px; outline: none; transition: border-color 0.2s; margin-bottom: 20px; border-radius: 6px; }
+.field-input:focus { border-color: var(--v); background: #fff; }
+.field-select { width: 100%; background: #faf9fc; border: 1px solid var(--border); color: var(--text); padding: 12px 14px; font-family: 'Inter', sans-serif; font-size: 13px; outline: none; margin-bottom: 20px; cursor: pointer; border-radius: 6px; }
+.field-select:focus { border-color: var(--v); }
+.field-textarea { width: 100%; background: #faf9fc; border: 1px solid var(--border); color: var(--text); padding: 12px 14px; font-family: 'Inter', sans-serif; font-size: 13px; outline: none; margin-bottom: 20px; resize: vertical; min-height: 80px; border-radius: 6px; }
+.field-textarea:focus { border-color: var(--v); }
+.btn-primary { background: var(--v); color: #fff; border: none; padding: 12px 20px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: opacity 0.2s; border-radius: 6px; }
+.btn-primary:hover { opacity: 0.88; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-ghost { background: #fff; color: var(--sub); border: 1px solid var(--border); padding: 10px 18px; font-family: 'Inter', sans-serif; font-size: 11px; cursor: pointer; transition: all 0.2s; border-radius: 6px; }
+.btn-ghost:hover { border-color: var(--v-mid); color: var(--v); background: var(--v-light); }
+.btn-danger { background: transparent; color: var(--danger); border: 1px solid #fecaca; padding: 8px 16px; font-family: 'Inter', sans-serif; font-size: 11px; cursor: pointer; transition: all 0.2s; border-radius: 6px; }
+.btn-danger:hover { background: var(--danger-bg); }
+.error-msg { color: var(--danger); font-size: 11px; margin-bottom: 16px; background: var(--danger-bg); padding: 8px 12px; border-radius: 6px; border: 1px solid #fecaca; }
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 28px 0; flex-shrink: 0; position: fixed; height: 100vh; overflow-y: auto; z-index: 100; box-shadow: 2px 0 8px rgba(124,58,237,0.04); }
+.sidebar-logo { padding: 0 24px 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px; cursor: pointer; text-align: center; }
+.sidebar-logo:hover { opacity: 0.85; }
+.sidebar-logo-hwg { font-size: 26px; font-weight: 800; color: var(--v); letter-spacing: -1px; line-height: 1; }
+.sidebar-logo-sub { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 3px; }
+.sidebar-user { padding: 0 24px 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.sidebar-user-name { font-weight: 700; font-size: 13px; color: var(--text); }
+.sidebar-user-role { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+.nav-item { padding: 10px 24px; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--sub); cursor: pointer; transition: all 0.15s; border-left: 2px solid transparent; }
+.nav-item:hover { color: var(--v); background: var(--v-light); }
+.nav-item.active { color: var(--v); border-left-color: var(--v); background: var(--v-light); font-weight: 600; }
+.sidebar-bottom { margin-top: auto; padding: 20px 24px 0; border-top: 1px solid var(--border); }
+.logout-btn { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: color 0.15s; background: none; border: none; font-family: 'Inter', sans-serif; }
+.logout-btn:hover { color: var(--danger); }
+.main-content { margin-left: 220px; flex: 1; padding: 40px; min-height: 100vh; background: var(--bg); }
+.page-title { font-size: 28px; font-weight: 800; color: var(--text); margin-bottom: 4px; letter-spacing: -0.5px; }
+.page-sub { font-size: 11px; color: var(--sub); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 32px; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 36px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); padding: 20px 24px; position: relative; overflow: hidden; border-radius: 8px; }
+.stat-card::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--v); opacity: 0.15; }
+.stat-num { font-size: 36px; font-weight: 800; color: var(--v); line-height: 1; }
+.stat-label { font-size: 10px; color: var(--sub); letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; }
+.section-title { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text); margin-bottom: 16px; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 40px; }
+.data-table th { text-align: left; padding: 10px 16px; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 500; background: #faf9fc; }
+.data-table td { padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--sub); vertical-align: middle; }
+.data-table tr:hover td { background: var(--v-light); cursor: pointer; }
+.client-name { font-weight: 700; font-size: 13px; color: var(--text); }
+.badge { display: inline-block; padding: 3px 10px; font-size: 10px; letter-spacing: 1px; font-weight: 500; }
+.badge-active { background: var(--lime-bg); color: var(--lime); border: 1px solid #bbf7d0; }
+.badge-on_hold { background: var(--warning-bg); color: var(--warning); border: 1px solid #fde68a; }
+.badge-closed { background: #f9fafb; color: var(--muted); border: 1px solid var(--border); }
+.badge-cancelled { background: var(--danger-bg); color: var(--danger); border: 1px solid #fecaca; }
+.badge-inactive { background: #f9fafb; color: var(--muted); border: 1px solid var(--border); }
+.stage-pill { display: inline-block; padding: 3px 10px; font-size: 10px; border-radius: 2px; }
+.positions-grid { display: grid; gap: 20px; }
+.position-card { background: var(--card); border: 1px solid var(--border); padding: 24px; transition: border-color 0.2s; cursor: pointer; border-radius: 8px; }
+.position-card:hover { border-color: var(--v-mid); }
+.position-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+.position-title { font-size: 18px; font-weight: 700; color: #f0f0f0; }
+.candidates-list { display: flex; flex-direction: column; gap: 8px; }
+.candidate-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; }
+.candidate-name { font-size: 13px; color: #e0e0e0; font-weight: 500; }
+.candidate-info { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.empty-state { padding: 32px; text-align: center; color: var(--muted); font-size: 11px; letter-spacing: 2px; text-transform: uppercase; border: 1px dashed var(--border); border-radius: 8px; background: #faf9fc; }
+.alert-card { background: var(--warning-bg); border: 1px solid #fde68a; padding: 16px 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; }
+.alert-card.red { background: var(--danger-bg); border-color: #fecaca; }
+.alert-text { font-size: 12px; color: var(--warning); }
+.alert-text.red { color: var(--danger); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(30,27,46,0.4); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+.modal { background: var(--card); border: 1px solid var(--border); padding: 36px; width: 100%; max-width: 580px; max-height: 90vh; overflow-y: auto; position: relative; border-radius: 12px; box-shadow: 0 8px 32px rgba(124,58,237,0.12); }
+.modal::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--v); border-radius: 12px 12px 0 0; }
+.modal-title { font-size: 20px; font-weight: 800; margin-bottom: 24px; color: var(--text); }
+.modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-group { margin-bottom: 4px; }
+.filter-row { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; }
+.filter-select { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 8px 14px; font-family: 'Inter', sans-serif; font-size: 11px; outline: none; cursor: pointer; border-radius: 6px; }
+.filter-select:focus { border-color: var(--v); }
+.detail-header { background: var(--card); border: 1px solid var(--border); padding: 28px; margin-bottom: 24px; border-radius: 8px; }
+.detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+.detail-item label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 4px; }
+.detail-item span { font-size: 13px; color: #e0e0e0; }
+.back-btn { font-size: 11px; color: var(--sub); cursor: pointer; letter-spacing: 1px; margin-bottom: 20px; display: inline-flex; align-items: center; gap: 6px; }
+.back-btn:hover { color: var(--v); }
+.loading { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--v-mid); font-size: 11px; letter-spacing: 3px; text-transform: uppercase; }
+.semaphore-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.dot-green { background: var(--lime); } .dot-yellow { background: var(--warning); } .dot-red { background: var(--danger); }
+.tab-row { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.tab { padding: 10px 20px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--sub); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+.tab.active { color: var(--v); border-bottom-color: var(--v); }
+.tab:hover { color: #f0f0f0; }
+</style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-    const { useState, useRef, useCallback } = React;
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+const SUPABASE_URL = 'https://sdoxrlxfwldhnqvuioty.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_5zlYLDfu2p7TRQKcCykuKA_2NxCRE5G';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const STATUSES = ['sourced','entrevista_hwg','entrevista_cliente_fit','entrevista_cliente_tech','entrevista_cliente_cultura','offer','preocupacional','psicotecnico','hired','rechazado_salario','rechazado_tech','rechazado_location','on_hold'];
+const STATUS_COLORS = { sourced:'#3b82f6', entrevista_hwg:'#8b5cf6', entrevista_cliente_fit:'#a78bfa', entrevista_cliente_tech:'#f59e0b', entrevista_cliente_cultura:'#fb923c', offer:'#a3e635', preocupacional:'#4ade80', psicotecnico:'#22c55e', hired:'#16a34a', rechazado_salario:'#ef4444', rechazado_tech:'#dc2626', rechazado_location:'#b91c1c', on_hold:'#6b7280' };
 
-    function Spinner() {
-      return (
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,padding:'40px 0'}}>
-          <div style={{width:36,height:36,border:'3px solid #ebebeb',borderTopColor:'#6C3BFF',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
-          <span style={{color:'#888',fontSize:15}}>Claude está analizando el CV...</span>
+function StagePill({ status }) {
+  const c = STATUS_COLORS[status]||'#555';
+  return <span className="stage-pill" style={{background:`${c}22`,color:c,fontSize:10}}>{status?.replace(/_/g,' ')}</span>;
+}
+function StatusBadge({ status }) {
+  return <span className={`badge badge-${status}`}>{status?.replace(/_/g,' ')}</span>;
+}
+function HoursAgo({ ts }) {
+  if (!ts) return <span style={{color:'var(--sub)'}}>—</span>;
+  const h = Math.floor((Date.now()-new Date(ts))/3600000);
+  const c = h>=96?'#ef4444':h>=72?'#f59e0b':'#a3e635';
+  const d = h>=96?'dot-red':h>=72?'dot-yellow':'dot-green';
+  return <span><span className={`semaphore-dot ${d}`}></span><span style={{color:c,fontSize:11}}>{h}h sin movimiento</span></span>;
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+function Login({ onLogin }) {
+  const [email,setEmail]=useState(''); const [pass,setPass]=useState(''); const [error,setError]=useState(''); const [loading,setLoading]=useState(false);
+  const handleLogin = async () => {
+    setLoading(true); setError('');
+    const {data,error:err} = await supabase.from('users').select('*').eq('email',email).eq('password',pass).single();
+    if (err||!data) { setError('Credenciales incorrectas'); setLoading(false); return; }
+    onLogin(data); setLoading(false);
+  };
+  return (
+    <div className="login-wrap">
+      <div className="login-card">
+        <div className="logo">HWG</div>
+        <div className="logo-sub">Talent Consultants</div>
+        <label className="field-label">Email</label>
+        <input className="field-input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com" type="email"/>
+        <label className="field-label">Contraseña</label>
+        <input className="field-input" type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==='Enter'&&handleLogin()}/>
+        {error && <div className="error-msg">{error}</div>}
+        <button className="btn-primary" style={{width:'100%'}} onClick={handleLogin} disabled={loading}>{loading?'Ingresando...':'Ingresar'}</button>
+      </div>
+    </div>
+  );
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div className="modal-title">{title}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── CLIENT MODAL ──────────────────────────────────────────────────────────────
+function ClientModal({ onClose, onSave, initial }) {
+  const parseStakeholders = (raw) => {
+    if (!raw) return [{name:'',contact:''}];
+    try { const p=JSON.parse(raw); return Array.isArray(p)?p:[{name:raw,contact:''}]; }
+    catch(e) { return [{name:raw,contact:''}]; }
+  };
+  const [form,setForm]=useState(initial||{name:'',status:'active',notes:''});
+  const [stakeholders,setStakeholders]=useState(parseStakeholders(initial?.stakeholder));
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const setSH=(i,k,v)=>setStakeholders(s=>s.map((x,idx)=>idx===i?{...x,[k]:v}:x));
+  const addSH=()=>setStakeholders(s=>[...s,{name:'',contact:''}]);
+  const removeSH=(i)=>setStakeholders(s=>s.filter((_,idx)=>idx!==i));
+  const save = async () => {
+    if (!form.name) return;
+    const payload={...form, stakeholder:JSON.stringify(stakeholders.filter(s=>s.name))};
+    if (initial?.id) await supabase.from('clients').update(payload).eq('id',initial.id);
+    else await supabase.from('clients').insert([payload]);
+    onSave();
+  };
+  return (
+    <Modal title={initial?'Editar cliente':'Nuevo cliente'} onClose={onClose}>
+      <label className="field-label">Empresa</label>
+      <input className="field-input" value={form.name} onChange={e=>set('name',e.target.value)} placeholder="Globant"/>
+      <label className="field-label" style={{marginBottom:12}}>Stakeholders</label>
+      {stakeholders.map((s,i)=>(
+        <div key={i} style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:8,marginBottom:10,alignItems:'center'}}>
+          <input className="field-input" style={{marginBottom:0}} value={s.name} onChange={e=>setSH(i,'name',e.target.value)} placeholder="Nombre"/>
+          <input className="field-input" style={{marginBottom:0}} value={s.contact} onChange={e=>setSH(i,'contact',e.target.value)} placeholder="Email / Tel"/>
+          {stakeholders.length>1&&<button className="btn-danger" style={{padding:'8px 10px',fontSize:12}} onClick={()=>removeSH(i)}>✕</button>}
         </div>
-      );
+      ))}
+      <button className="btn-ghost" style={{fontSize:10,padding:'6px 12px',marginBottom:20}} onClick={addSH}>+ Agregar stakeholder</button>
+      <label className="field-label">Notas del cliente</label>
+      <textarea className="field-textarea" value={form.notes||''} onChange={e=>set('notes',e.target.value)} placeholder="Contexto, industria, fee acordado..."/>
+      <label className="field-label">Estado</label>
+      <select className="field-select" value={form.status} onChange={e=>set('status',e.target.value)}>
+        <option value="active">Activo</option><option value="inactive">Inactivo</option>
+      </select>
+      <div className="modal-actions">
+        <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+        <button className="btn-primary" onClick={save}>Guardar</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── POSITION MODAL ────────────────────────────────────────────────────────────
+function PositionModal({ onClose, onSave, initial, clients, users }) {
+  const [form,setForm]=useState(initial||{client_id:'',role:'',location:'',salary_band:'',jd:'',vacancies:1,status:'active',notes:''});
+  const [recruiters,setRecruiters]=useState([]);
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  useEffect(()=>{
+    if (initial?.id) supabase.from('position_recruiters').select('recruiter_id').eq('position_id',initial.id).then(({data})=>setRecruiters(data?.map(r=>r.recruiter_id)||[]));
+  },[]);
+  const save = async () => {
+    if (!form.client_id||!form.role) return;
+    let posId = initial?.id;
+    if (posId) { await supabase.from('positions').update(form).eq('id',posId); }
+    else { const {data}=await supabase.from('positions').insert([form]).select().single(); posId=data?.id; }
+    if (posId) {
+      await supabase.from('position_recruiters').delete().eq('position_id',posId);
+      if (recruiters.length) await supabase.from('position_recruiters').insert(recruiters.map(r=>({position_id:posId,recruiter_id:r})));
     }
-
-    function SnapRow({label, value, accent}) {
-      const ok = !value.includes('[COMPLETAR]');
-      return (
-        <div style={{display:'flex',gap:12,padding:'10px 0',borderBottom:'1px solid #f0f0f0',alignItems:'flex-start'}}>
-          <span style={{fontSize:16,minWidth:22}}>{ok ? '✅' : '⬜'}</span>
-          <span style={{fontWeight:700,minWidth:170,fontSize:14,color:'#374151',flexShrink:0}}>{label}</span>
-          <span style={{fontSize:14,color:'#0F0F0F'}}>{value}</span>
+    onSave();
+  };
+  const recList = users.filter(u=>u.role==='recruiter');
+  return (
+    <Modal title={initial?'Editar posición':'Nueva posición'} onClose={onClose}>
+      <div className="form-row">
+        <div className="form-group">
+          <label className="field-label">Cliente</label>
+          <select className="field-select" value={form.client_id} onChange={e=>set('client_id',e.target.value)}>
+            <option value="">Seleccionar...</option>
+            {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
         </div>
-      );
+        <div className="form-group">
+          <label className="field-label">Rol</label>
+          <input className="field-input" value={form.role} onChange={e=>set('role',e.target.value)} placeholder="Senior Backend Engineer"/>
+        </div>
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label className="field-label">Location</label>
+          <input className="field-input" value={form.location} onChange={e=>set('location',e.target.value)} placeholder="Argentina / Remoto"/>
+        </div>
+        <div className="form-group">
+          <label className="field-label">Salary Band</label>
+          <input className="field-input" value={form.salary_band} onChange={e=>set('salary_band',e.target.value)} placeholder="$3.000 USD"/>
+        </div>
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label className="field-label">Vacantes</label>
+          <input className="field-input" type="number" min="1" value={form.vacancies} onChange={e=>set('vacancies',parseInt(e.target.value))}/>
+        </div>
+        <div className="form-group">
+          <label className="field-label">Estado</label>
+          <select className="field-select" value={form.status} onChange={e=>set('status',e.target.value)}>
+            <option value="active">Active</option><option value="on_hold">On Hold</option><option value="closed">Closed</option><option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <label className="field-label">JD / Descripción</label>
+      <textarea className="field-textarea" value={form.jd} onChange={e=>set('jd',e.target.value)} placeholder="Job description..."/>
+      <label className="field-label">Recruiters (Ctrl/Cmd para varios)</label>
+      <select multiple className="field-select" style={{height:100,marginBottom:4}} value={recruiters} onChange={e=>setRecruiters(Array.from(e.target.selectedOptions,o=>o.value))}>
+        {recList.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
+      </select>
+      <div style={{fontSize:10,color:'var(--muted)',marginBottom:20}}>Mantené Ctrl/Cmd para seleccionar varios</div>
+      <label className="field-label">Notas</label>
+      <textarea className="field-textarea" value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Notas adicionales..." style={{minHeight:60}}/>
+      <div className="modal-actions">
+        <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+        <button className="btn-primary" onClick={save}>Guardar</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── CANDIDATE MODAL ───────────────────────────────────────────────────────────
+function CandidateModal({ onClose, onSave, initial, positions, currentUser }) {
+  const [form,setForm]=useState(initial||{name:'',linkedin_url:'',email:'',phone:''});
+  const [positionId,setPositionId]=useState(''); const [status,setStatus]=useState('sourced');
+  const [notes,setNotes]=useState(''); const [cvFile,setCvFile]=useState(null);
+  const [loading,setLoading]=useState(false); const [dupWarning,setDupWarning]=useState(null);
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const checkDup = async (url) => {
+    if (!url) return;
+    const {data}=await supabase.from('candidates').select('*').eq('linkedin_url',url).single();
+    setDupWarning(data||null);
+  };
+  const save = async () => {
+    setLoading(true);
+    let cvUrl=form.cv_url;
+    if (cvFile) {
+      const ext=cvFile.name.split('.').pop();
+      const path=`cvs/${Date.now()}.${ext}`;
+      await supabase.storage.from('candidates').upload(path,cvFile);
+      const {data:urlData}=supabase.storage.from('candidates').getPublicUrl(path);
+      cvUrl=urlData.publicUrl;
     }
+    let candId=dupWarning?.id||initial?.id;
+    if (!candId) { const {data}=await supabase.from('candidates').insert([{...form,cv_url:cvUrl}]).select().single(); candId=data?.id; }
+    if (candId&&positionId) {
+      const {data:app}=await supabase.from('applications').insert([{candidate_id:candId,position_id:positionId,recruiter_id:currentUser.id,status,notes}]).select().single();
+      if (app) await supabase.from('status_history').insert([{application_id:app.id,old_status:null,new_status:status,changed_by:currentUser.id}]);
+    }
+    setLoading(false); onSave();
+  };
+  return (
+    <Modal title="Agregar candidato" onClose={onClose}>
+      {dupWarning&&<div style={{background:'var(--warning-bg)',border:'1px solid #3a2500',padding:'12px 16px',marginBottom:20,fontSize:11,color:'var(--warning)'}}>⚠️ Ya existe: <strong>{dupWarning.name}</strong> — se agrega a la posición sin duplicar.</div>}
+      <label className="field-label">Nombre</label>
+      <input className="field-input" value={form.name} onChange={e=>set('name',e.target.value)} placeholder="Juan Pérez"/>
+      <label className="field-label">LinkedIn URL</label>
+      <input className="field-input" value={form.linkedin_url} onChange={e=>{set('linkedin_url',e.target.value);checkDup(e.target.value);}} placeholder="linkedin.com/in/juanperez"/>
+      <div className="form-row">
+        <div className="form-group"><label className="field-label">Email</label><input className="field-input" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="juan@email.com"/></div>
+        <div className="form-group"><label className="field-label">Teléfono</label><input className="field-input" value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="+54 11 ..."/></div>
+      </div>
+      <label className="field-label">CV (PDF)</label>
+      <input type="file" accept=".pdf,.doc,.docx" onChange={e=>setCvFile(e.target.files[0])} style={{marginBottom:20,fontSize:11,color:'var(--muted)',width:'100%'}}/>
+      <label className="field-label">Posición</label>
+      <select className="field-select" value={positionId} onChange={e=>setPositionId(e.target.value)}>
+        <option value="">Seleccionar posición...</option>
+        {(positions||[]).filter(p=>p.status==='active').map(p=><option key={p.id} value={p.id}>{p.clients?.name} — {p.role}</option>)}
+      </select>
+      <label className="field-label">Estado inicial</label>
+      <select className="field-select" value={status} onChange={e=>setStatus(e.target.value)}>
+        {STATUSES.map(s=><option key={s} value={s}>{s.replace(/_/g,' ')}</option>)}
+      </select>
+      <label className="field-label">Notas</label>
+      <textarea className="field-textarea" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Contexto del candidato..."/>
+      <div className="modal-actions">
+        <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+        <button className="btn-primary" onClick={save} disabled={loading}>{loading?'Guardando...':'Guardar'}</button>
+      </div>
+    </Modal>
+  );
+}
 
-    function ResultView({data, lang}) {
-      const [copied, setCopied] = useState(false);
-      const [personal, setPersonal] = useState({
-        position: data.personal?.position || '[COMPLETAR]',
-        linkedin: data.personal?.linkedin || '[COMPLETAR]',
-        phone: data.personal?.phone || '[COMPLETAR]',
-        email: data.personal?.email || '[COMPLETAR]',
-      });
-      const isEs = lang === 'es';
-      const today = new Date().toLocaleDateString(isEs ? 'es-AR' : 'en-US', {day:'2-digit',month:'long',year:'numeric'});
+// ── CANDIDATE PROFILE ─────────────────────────────────────────────────────────
+function DocsNotesSection({ candData, setCandData, onUpdate }) {
+  const [docs, setDocs] = useState([]);
+  const [uploading, setUploading] = useState(null); // type being uploaded
+  const [notes, setNotes] = useState(candData.notes || '');
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
 
-      const labels = isEs
-        ? {techFit:'Fit técnico', exp:'Experiencia', cult:'Culture fit', lang:'Idiomas', avail:'Disponibilidad', salary:'Pretensión salarial', tools:'Tools & Herramientas', tool:'Herramienta', years:'Años', level:'Nivel & contexto', why:'El candidato/a en 3 líneas'}
-        : {techFit:'Technical fit', exp:'Experience', cult:'Culture fit', lang:'Languages', avail:'Availability', salary:'Salary expectation', tools:'Tools & Stack', tool:'Tool', years:'Years', level:'Level & context', why:'The candidate in 3 lines'};
+  const loadDocs = useCallback(async () => {
+    const {data} = await supabase.from('candidate_documents').select('*').eq('candidate_id', candData.id).order('created_at', {ascending: false});
+    setDocs(data || []);
+    // also sync cv from candidates table
+  }, [candData.id]);
 
-      const personalLabels = isEs
-        ? {position:'Posición', date:'Fecha de presentación', linkedin:'LinkedIn', phone:'Teléfono', email:'Mail'}
-        : {position:'Position', date:'Presentation date', linkedin:'LinkedIn', phone:'Phone', email:'Email'};
+  useEffect(() => { loadDocs(); }, [loadDocs]);
 
-      const updatePersonal = (key, val) => setPersonal(p => ({...p, [key]: val}));
+  const uploadDoc = async (file, type) => {
+    setUploading(type);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${candData.id}/${type}_${Date.now()}.${ext}`;
+      const {error: upErr} = await supabase.storage.from('candidates').upload(path, file, {upsert: true});
+      if (upErr) { alert('Error subiendo archivo: ' + upErr.message); setUploading(null); return; }
+      const {data: urlData} = supabase.storage.from('candidates').getPublicUrl(path);
+      const url = urlData.publicUrl;
+      if (type === 'cv') {
+        const {error: dbErr} = await supabase.from('candidates').update({cv_url: url}).eq('id', candData.id);
+        if (dbErr) { alert('Error guardando: ' + dbErr.message); setUploading(null); return; }
+        setCandData(c => ({...c, cv_url: url}));
+      } else {
+        await supabase.from('candidate_documents').insert([{candidate_id: candData.id, type, name: file.name, url}]);
+        loadDocs();
+      }
+      if (onUpdate) onUpdate();
+    } catch(err) { alert('Error: ' + err.message); }
+    setUploading(null);
+  };
 
-      const inputStyle = {
-        border:'none', borderBottom:'1.5px dashed #d0d0d0', outline:'none',
-        fontSize:14, fontFamily:'DM Sans,sans-serif', color:'#0F0F0F',
-        background:'transparent', padding:'2px 4px', width:'100%'
-      };
+  const deleteDoc = async (doc) => {
+    if (!confirm(`¿Eliminar "${doc.name}"?`)) return;
+    await supabase.from('candidate_documents').delete().eq('id', doc.id);
+    loadDocs();
+  };
 
-      const copyText = () => {
-        const txt = `${data.name}\n${data.role} · ${data.location}\n\n${Object.entries({[labels.techFit]:data.snapshot.techFit,[labels.exp]:data.snapshot.exp,[labels.cult]:data.snapshot.cult,[labels.lang]:data.snapshot.lang,[labels.avail]:data.snapshot.avail,[labels.salary]:data.snapshot.salary}).map(([k,v])=>`✅ ${k}: ${v}`).join('\n')}\n\n${labels.tools}\n${data.tools.map(t=>`${t.tool} | ${t.years} | ${t.level}`).join('\n')}\n\n${labels.why}\n${data.why}\n\nHWG Talent Consultants · ${today}\nwww.hwgtalent.com`;
-        navigator.clipboard.writeText(txt);
-        setCopied(true);
-        setTimeout(()=>setCopied(false), 2000);
-      };
+  const deleteCV = async () => {
+    if (!confirm('¿Eliminar el CV?')) return;
+    await supabase.from('candidates').update({cv_url: null}).eq('id', candData.id);
+    setCandData(c => ({...c, cv_url: null}));
+    if (onUpdate) onUpdate();
+  };
 
-      const sectionPill = (text) => (
-        <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#6C3BFF',marginBottom:10,paddingLeft:10,borderLeft:'4px solid #C8F135',marginTop:24}}>
-          {text}
+  const saveNotes = async () => {
+    setSavingNotes(true);
+    await supabase.from('candidates').update({notes}).eq('id', candData.id);
+    setCandData(c => ({...c, notes}));
+    setSavingNotes(false);
+    setNotesSaved(true);
+    setTimeout(() => setNotesSaved(false), 2000);
+  };
+
+  const DOC_TYPES = [
+    {type:'interview_notes', label:'Notas de entrevista', icon:'📝', accept:'.pdf,.doc,.docx'},
+    {type:'cover_letter', label:'Carta de presentación', icon:'✉️', accept:'.pdf,.doc,.docx'},
+    {type:'certificate', label:'Certificado / Portfolio', icon:'🏅', accept:'.pdf,.doc,.docx,.zip,.png,.jpg'},
+  ];
+
+  return (
+    <div style={{marginBottom:24}}>
+      {/* ── LinkedIn ── */}
+      {candData.linkedin_url && (
+        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:8,padding:16,marginBottom:12,display:'flex',alignItems:'center',gap:12}}>
+          <a href={`https://${candData.linkedin_url.replace('https://','')}`} target="_blank" rel="noopener noreferrer"
+            style={{display:'inline-flex',alignItems:'center',gap:8,background:'#0a66c2',color:'#fff',padding:'8px 16px',textDecoration:'none',fontSize:12,fontWeight:600,borderRadius:6}}>
+            <span>in</span> Ver perfil en LinkedIn ↗
+          </a>
+          <span style={{fontSize:11,color:'var(--muted)'}}>{candData.linkedin_url}</span>
         </div>
-      );
+      )}
 
-      const downloadWord = async () => {
-        try {
-          const res = await fetch('/api/docx', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({data: {...data, personal}, lang, today})
-          });
-          if (!res.ok) throw new Error('Error generando documento');
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${data.name.replace(/\s+/g, '_')}_HWG.docx`;
-          a.click();
-          URL.revokeObjectURL(url);
-        } catch(e) {
-          alert('Error al descargar. Intentá de nuevo.');
-        }
-      };
+      {/* ── CV ── */}
+      <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:8,padding:20,marginBottom:12}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom: candData.cv_url ? 16 : 0}}>
+          <div style={{fontWeight:600,fontSize:13,color:'var(--text)'}}>📄 Curriculum Vitae</div>
+          <div style={{display:'flex',gap:8}}>
+            {candData.cv_url && <a href={candData.cv_url} target="_blank" rel="noopener noreferrer" className="btn-ghost" style={{textDecoration:'none',fontSize:11,padding:'6px 12px'}}>Ver ↗</a>}
+            <label className="btn-ghost" style={{cursor:'pointer',fontSize:11,padding:'6px 12px'}}>
+              {uploading==='cv' ? 'Subiendo...' : candData.cv_url ? 'Reemplazar' : '+ Subir CV'}
+              <input type="file" accept=".pdf,.doc,.docx" style={{display:'none'}} onChange={e=>{if(e.target.files[0]) uploadDoc(e.target.files[0],'cv');}}/>
+            </label>
+            {candData.cv_url && <button className="btn-danger" style={{fontSize:11,padding:'6px 12px'}} onClick={deleteCV}>Eliminar</button>}
+          </div>
+        </div>
+        {candData.cv_url && (
+          candData.cv_url.toLowerCase().includes('.pdf')
+            ? <iframe src={candData.cv_url} style={{width:'100%',height:400,border:'none',borderRadius:4,background:'#fff'}} title="CV"/>
+            : <div style={{fontSize:11,color:'var(--muted)'}}>Archivo Word — <a href={candData.cv_url} target="_blank" rel="noopener noreferrer" style={{color:'var(--v)'}}>descargar ↗</a></div>
+        )}
+        {!candData.cv_url && <div style={{fontSize:11,color:'var(--muted)',marginTop:8}}>Sin CV cargado</div>}
+      </div>
 
-      return (
-        <div className="fade-in" style={{background:'#fff',borderRadius:16,padding:32,border:'2px solid #6C3BFF',boxShadow:'0 0 0 4px #6C3BFF18',marginTop:24}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20,flexWrap:'wrap',gap:12}}>
-            <div>
-              <div style={{fontSize:26,fontWeight:800,fontFamily:"'DM Serif Display',serif",lineHeight:1.2}}>{data.name}</div>
-              <div style={{color:'#888',fontSize:14,marginTop:4}}>{data.role} · {data.location} · {data.modality}</div>
+      {/* ── Otros documentos ── */}
+      <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:8,padding:20,marginBottom:12}}>
+        <div style={{fontWeight:600,fontSize:13,color:'var(--text)',marginBottom:14}}>📁 Documentos adicionales</div>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom: docs.length>0 ? 16 : 0}}>
+          {DOC_TYPES.map(dt=>(
+            <label key={dt.type} className="btn-ghost" style={{cursor:'pointer',fontSize:11,padding:'6px 12px'}}>
+              {uploading===dt.type ? 'Subiendo...' : `+ ${dt.label}`}
+              <input type="file" accept={dt.accept} style={{display:'none'}} onChange={e=>{if(e.target.files[0]) uploadDoc(e.target.files[0],dt.type);}}/>
+            </label>
+          ))}
+        </div>
+        {docs.length===0 && <div style={{fontSize:11,color:'var(--muted)'}}>Sin documentos cargados</div>}
+        {docs.map(doc=>(
+          <div key={doc.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 0',borderTop:'1px solid var(--border)'}}>
+            <div style={{fontSize:12,color:'var(--text)'}}>
+              <span style={{background:'var(--v-light)',color:'var(--v)',fontSize:9,padding:'2px 6px',borderRadius:3,marginRight:8,textTransform:'uppercase',letterSpacing:1}}>{doc.type.replace(/_/g,' ')}</span>
+              {doc.name}
             </div>
-            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-              <button onClick={downloadWord} style={{padding:'9px 18px',background:'#0F0F0F',border:'none',color:'#C8F135',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'DM Sans,sans-serif',whiteSpace:'nowrap'}}>
-                ⬇ Descargar Word
-              </button>
-              <button onClick={copyText} style={{padding:'9px 18px',background:'#F9F6F1',border:'1.5px solid #6C3BFF',color:'#6C3BFF',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'DM Sans,sans-serif',whiteSpace:'nowrap'}}>
-                {copied ? '✓ Copiado' : 'Copiar texto'}
-              </button>
+            <div style={{display:'flex',gap:6}}>
+              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="btn-ghost" style={{textDecoration:'none',fontSize:10,padding:'4px 8px'}}>Ver ↗</a>
+              <button className="btn-danger" style={{fontSize:10,padding:'4px 8px'}} onClick={()=>deleteDoc(doc)}>Eliminar</button>
             </div>
           </div>
+        ))}
+      </div>
 
-          {sectionPill(isEs ? 'Información personal' : 'Personal Information')}
+      {/* ── Notas generales ── */}
+      <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:8,padding:20}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div style={{fontWeight:600,fontSize:13,color:'var(--text)'}}>🗒 Notas del candidato</div>
+          <button className="btn-primary" style={{fontSize:11,padding:'6px 14px'}} onClick={saveNotes} disabled={savingNotes}>
+            {savingNotes ? 'Guardando...' : notesSaved ? '✓ Guardado' : 'Guardar'}
+          </button>
+        </div>
+        <textarea className="field-textarea" style={{marginBottom:0,minHeight:100}} 
+          placeholder="Notas generales sobre el candidato (no asociadas a una posición específica)..."
+          value={notes} onChange={e=>setNotes(e.target.value)}/>
+      </div>
+    </div>
+  );
+}
+
+function CandidateProfile({ candidate, onBack, currentUser, allPositions, onUpdate }) {
+  const [apps,setApps]=useState([]); const [loading,setLoading]=useState(true);
+  const [addModal,setAddModal]=useState(false); const [editForm,setEditForm]=useState(null);
+  const [note,setNote]=useState(''); const [saving,setSaving]=useState(false);
+  const [editCand,setEditCand]=useState(false);
+  const [candForm,setCandForm]=useState({name:candidate.name,email:candidate.email||'',phone:candidate.phone||'',linkedin_url:candidate.linkedin_url||''});
+  const [candData,setCandData]=useState(candidate);
+  const [presentarModal,setPresentarModal]=useState(null);
+  const [cvUploading,setCvUploading]=useState(false);
+  const saveCand = async () => {
+    await supabase.from('candidates').update(candForm).eq('id',candData.id);
+    setCandData(c=>({...c,...candForm})); setEditCand(false); if(onUpdate) onUpdate();
+  };
+
+  const load = useCallback(async()=>{
+    const {data}=await supabase.from('applications').select('*, positions(role,status,clients(name)), users(name)').eq('candidate_id',candidate.id).order('last_updated',{ascending:false});
+    setApps(data||[]); setLoading(false);
+  },[candidate.id]);
+
+  useEffect(()=>{ load(); },[load]);
+
+  const updateStatus = async (appId, newStatus, oldStatus) => {
+    await supabase.from('applications').update({status:newStatus,last_updated:new Date().toISOString()}).eq('id',appId);
+    await supabase.from('status_history').insert([{application_id:appId,old_status:oldStatus,new_status:newStatus,changed_by:currentUser.id}]);
+    // Auto-manage vacancies on hire
+    if (newStatus==='hired' && oldStatus!=='hired') {
+      const app = apps.find(a=>a.id===appId);
+      if (app?.position_id) {
+        const {data:pos}=await supabase.from('positions').select('vacancies,status').eq('id',app.position_id).single();
+        if (pos) {
+          const newV=(pos.vacancies||1)-1;
+          await supabase.from('positions').update(newV<=0?{vacancies:0,status:'closed'}:{vacancies:newV}).eq('id',app.position_id);
+        }
+      }
+    }
+    if (oldStatus==='hired' && newStatus!=='hired') {
+      const app = apps.find(a=>a.id===appId);
+      if (app?.position_id) {
+        const {data:pos}=await supabase.from('positions').select('vacancies').eq('id',app.position_id).single();
+        if (pos) await supabase.from('positions').update({vacancies:(pos.vacancies||0)+1,status:'active'}).eq('id',app.position_id);
+      }
+    }
+    load();
+  };
+
+  const addToPosition = async (positionId, status, notes) => {
+    const existing = await supabase.from('applications').select('id').eq('candidate_id',candidate.id).eq('position_id',positionId).single();
+    if (existing.data) { alert('Ya está en esa posición'); return; }
+    const {data:app}=await supabase.from('applications').insert([{candidate_id:candidate.id,position_id:positionId,recruiter_id:currentUser.id,status,notes}]).select().single();
+    if (app) await supabase.from('status_history').insert([{application_id:app.id,old_status:null,new_status:status,changed_by:currentUser.id}]);
+    setAddModal(false); load();
+  };
+
+  const saveNote = async (appId) => {
+    if (!note.trim()) return;
+    setSaving(true);
+    await supabase.from('applications').update({notes:note,last_updated:new Date().toISOString()}).eq('id',appId);
+    setNote(''); setEditForm(null); setSaving(false); load();
+  };
+
+  if (loading) return <div className="loading">Cargando...</div>;
+
+  return (
+    <div>
+      <div className="back-btn" onClick={onBack}>← Volver</div>
+      <div className="detail-header">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+          <div>
+            <div className="page-title">{candData.name}</div>
+            <div style={{fontSize:11,color:'var(--muted)',marginTop:4,letterSpacing:1}}>
+              {candData.email&&<span>{candData.email} · </span>}
+              {candData.phone&&<span>{candData.phone} · </span>}
+              {candData.linkedin_url&&<a href={`https://${candData.linkedin_url.replace('https://','')}`} target="_blank" rel="noopener noreferrer" style={{color:'#3b82f6',textDecoration:'none'}}>LinkedIn ↗</a>}
+            </div>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn-ghost" onClick={()=>setEditCand(true)}>Editar</button>
+            <button className="btn-primary" onClick={()=>setAddModal(true)}>+ Agregar a posición</button>
+          </div>
+        </div>
+      </div>
+
+      {editCand&&(
+        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:8,padding:24,marginBottom:24}}>
+          <div style={{fontSize:13,fontWeight:700,marginBottom:16,letterSpacing:1,color:'var(--text)'}}>Editar candidato</div>
+          <div className="form-row">
+            <div><label className="field-label">Nombre</label><input className="field-input" value={candForm.name} onChange={e=>setCandForm(f=>({...f,name:e.target.value}))}/></div>
+            <div><label className="field-label">Email</label><input className="field-input" value={candForm.email} onChange={e=>setCandForm(f=>({...f,email:e.target.value}))}/></div>
+          </div>
+          <div className="form-row">
+            <div><label className="field-label">Teléfono</label><input className="field-input" value={candForm.phone} onChange={e=>setCandForm(f=>({...f,phone:e.target.value}))}/></div>
+            <div><label className="field-label">LinkedIn URL</label><input className="field-input" value={candForm.linkedin_url} onChange={e=>setCandForm(f=>({...f,linkedin_url:e.target.value}))}/></div>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn-primary" onClick={saveCand}>Guardar</button>
+            <button className="btn-ghost" onClick={()=>setEditCand(false)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── DOCUMENTOS & NOTAS ── */}
+      <DocsNotesSection candData={candData} setCandData={setCandData} onUpdate={onUpdate} />
+
+      <div className="section-title" style={{marginBottom:16}}>Posiciones ({apps.length})</div>
+      {apps.length===0
+        ? <div className="empty-state">Sin posiciones asignadas</div>
+        : <div className="candidates-list">
+            {apps.map(a=>(
+              <div key={a.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:6,padding:'16px'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:8}}>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:13}}>{a.positions?.clients?.name} — {a.positions?.role}</div>
+                    <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{a.users?.name} · <HoursAgo ts={a.last_updated}/></div>
+                    {a.notes&&<div style={{fontSize:11,color:'var(--sub)',marginTop:6,fontStyle:'italic'}}>"{a.notes}"</div>}
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <select style={{background:'var(--card)',border:'1px solid var(--border)',color:'var(--text)',padding:'6px 10px',fontFamily:'Inter',fontSize:11,outline:'none',cursor:'pointer',borderRadius:4}}
+                      value={a.status} onChange={e=>updateStatus(a.id,e.target.value,a.status)}>
+                      {STATUSES.map(s=><option key={s} value={s}>{s.replace(/_/g,' ')}</option>)}
+                    </select>
+                    <button className="btn-ghost" style={{padding:'5px 10px',fontSize:10}} onClick={()=>{setEditForm(a.id);setNote(a.notes||'');}}>Nota</button>
+                    <button className="btn-ghost" style={{padding:'5px 10px',fontSize:10,color:'var(--v)',borderColor:'var(--v)'}} onClick={()=>setPresentarModal({app:a,position:a.positions,candidate:candData})}>Presentar ↗</button>
+
+                  </div>
+                </div>
+                {editForm===a.id&&(
+                  <div style={{marginTop:12}}>
+                    <textarea className="field-textarea" style={{marginBottom:8}} value={note} onChange={e=>setNote(e.target.value)} placeholder="Agregar nota..."/>
+                    <div style={{display:'flex',gap:8}}>
+                      <button className="btn-primary" style={{padding:'8px 16px'}} onClick={()=>saveNote(a.id)} disabled={saving}>Guardar</button>
+                      <button className="btn-ghost" style={{padding:'8px 16px'}} onClick={()=>setEditForm(null)}>Cancelar</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+      }
+
+      {addModal&&(
+        <AddToPositionModal
+          onClose={()=>setAddModal(false)}
+          onSave={addToPosition}
+          positions={allPositions}
+          existingPositionIds={apps.map(a=>a.position_id)}
+        />
+      )}
+      {presentarModal&&(
+        <PresentarModal
+          app={presentarModal.app}
+          position={presentarModal.position}
+          candidate={presentarModal.candidate}
+          cvUrl={candData.cv_url}
+          onClose={()=>setPresentarModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+
+// ── PRESENTAR MODAL ───────────────────────────────────────────────────────────
+function PresentarModal({ app, position, candidate, cvUrl, onClose }) {
+  const [lang, setLang] = useState('es');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  // Editable candidate fields
+  const [candEdit, setCandEdit] = useState({
+    name: candidate.name || '',
+    location: candidate.location || '',
+    phone: candidate.phone || '',
+    email: candidate.email || '',
+  });
+
+  // Presentation fields
+  const [presEdit, setPresEdit] = useState({
+    salary: '',
+    availability: '',
+  });
+
+  // Recruiter notes
+  const [recruiterNotes, setRecruiterNotes] = useState(app.notes || '');
+  const [notesFileLoading, setNotesFileLoading] = useState(false);
+
+  const jd = position?.jd || '';
+  const posLabel = `${position?.role || ''} · ${position?.clients?.name || ''}`;
+  const today = new Date().toLocaleDateString('es-AR', {day:'2-digit', month:'long', year:'numeric'});
+
+  const generate = async () => {
+    setLoading(true); setError(null); setResult(null);
+    try {
+      let cvBlob = null;
+      if (cvUrl) {
+        try { const r = await fetch(cvUrl); cvBlob = await r.blob(); } catch(e) {}
+      }
+
+      const formData = new FormData();
+      if (cvBlob) {
+        formData.append('cv', cvBlob, 'cv.pdf');
+      } else {
+        const textContent = `Candidato: ${candidate.name}
+LinkedIn: ${candidate.linkedin_url||'N/A'}
+Email: ${candidate.email||'N/A'}`;
+        formData.append('cv', new Blob([textContent], {type:'text/plain'}), 'candidato.txt');
+      }
+      formData.append('lang', lang);
+      formData.append('position', posLabel);
+
+      const notesPayload = [
+        recruiterNotes ? `NOTAS DEL RECRUITER:\n${recruiterNotes}` : '',
+        presEdit.salary ? `SALARIO PRETENDIDO: ${presEdit.salary}` : '',
+        presEdit.availability ? `DISPONIBILIDAD: ${presEdit.availability}` : '',
+        jd ? `JOB DESCRIPTION:\n${jd}` : '',
+      ].filter(Boolean).join('\n\n');
+
+      formData.append('notes', notesPayload);
+      formData.append('jd', jd);
+
+      const res = await fetch('https://hwg-app.vercel.app/api/generate', { method:'POST', body:formData });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      const raw = (data.content||[]).map(c=>c.text||'').join('').replace(/\`\`\`json|\`\`\`/g,'').trim();
+      const parsed = JSON.parse(raw);
+
+      // Merge editable fields
+      if (!parsed.personal) parsed.personal = {};
+      parsed.personal.position = posLabel;
+      parsed.personal.presentation_date = today;
+      if (!parsed.personal.linkedin) parsed.personal.linkedin = candidate.linkedin_url || '';
+      if (!parsed.personal.phone && candEdit.phone) parsed.personal.phone = candEdit.phone;
+      if (!parsed.personal.email && candEdit.email) parsed.personal.email = candEdit.email;
+      if (presEdit.salary) parsed.personal.salary = presEdit.salary;
+      if (presEdit.availability) parsed.personal.availability = presEdit.availability;
+      if (!parsed.location && candEdit.location) parsed.location = candEdit.location;
+      if (recruiterNotes) parsed.extra_notes = recruiterNotes;
+
+      setResult(parsed);
+    } catch(e) {
+      setError(e.message || 'Error al generar. Intentá de nuevo.');
+    } finally { setLoading(false); }
+  };
+
+  const downloadWord = async () => {
+    if (!result) return;
+    try {
+      const res = await fetch('https://hwg-app.vercel.app/api/docx', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({data:result, lang, today})
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href=url; a.download=`${candidate.name.replace(/\s+/g,'_')}_HWG.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch(e) { alert('Error al descargar'); }
+  };
+
+  const isEs = lang === 'es';
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:740,maxHeight:'92vh',overflowY:'auto'}}>
+
+        {/* Header */}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:24}}>
+          <div>
+            <div className="modal-title" style={{marginBottom:2}}>Presentar candidato</div>
+            <div style={{fontSize:11,color:'var(--muted)'}}>{posLabel}</div>
+          </div>
+          <button className="btn-ghost" style={{padding:'4px 10px',fontSize:11}} onClick={onClose}>✕</button>
+        </div>
+
+        {/* ── SECCIÓN 1: Datos del candidato ── */}
+        <div style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:16,marginBottom:16}}>
+          <div style={{fontSize:10,letterSpacing:2,textTransform:'uppercase',color:'var(--sub)',fontWeight:600,marginBottom:12}}>1 · Datos del candidato</div>
+          <div className="form-row">
+            <div>
+              <label className="field-label">Nombre completo</label>
+              <input className="field-input" style={{marginBottom:0}} value={candEdit.name} onChange={e=>setCandEdit(c=>({...c,name:e.target.value}))}/>
+            </div>
+            <div>
+              <label className="field-label">Ubicación</label>
+              <input className="field-input" style={{marginBottom:0}} value={candEdit.location} onChange={e=>setCandEdit(c=>({...c,location:e.target.value}))} placeholder="Ej: Buenos Aires, Argentina"/>
+            </div>
+          </div>
+          <div className="form-row" style={{marginTop:10}}>
+            <div>
+              <label className="field-label">Teléfono</label>
+              <input className="field-input" style={{marginBottom:0}} value={candEdit.phone} onChange={e=>setCandEdit(c=>({...c,phone:e.target.value}))} placeholder="+54 11 1234-5678"/>
+            </div>
+            <div>
+              <label className="field-label">Email</label>
+              <input className="field-input" style={{marginBottom:0}} value={candEdit.email} onChange={e=>setCandEdit(c=>({...c,email:e.target.value}))} placeholder="email@ejemplo.com"/>
+            </div>
+          </div>
+        </div>
+
+        {/* ── SECCIÓN 2: Datos de la presentación ── */}
+        <div style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:16,marginBottom:16}}>
+          <div style={{fontSize:10,letterSpacing:2,textTransform:'uppercase',color:'var(--sub)',fontWeight:600,marginBottom:12}}>2 · Presentación</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+            <div>
+              <label className="field-label">Posición</label>
+              <input className="field-input" style={{marginBottom:0}} value={posLabel} readOnly style={{marginBottom:0,background:'#f0eef8',color:'var(--sub)'}}/>
+            </div>
+            <div>
+              <label className="field-label">Fecha de presentación</label>
+              <input className="field-input" style={{marginBottom:0}} value={today} readOnly style={{marginBottom:0,background:'#f0eef8',color:'var(--sub)'}}/>
+            </div>
+            <div>
+              <label className="field-label">Salario pretendido <span style={{color:'var(--muted)',fontWeight:400}}>opcional</span></label>
+              <input className="field-input" style={{marginBottom:0}} value={presEdit.salary} onChange={e=>setPresEdit(p=>({...p,salary:e.target.value}))} placeholder="Ej: USD 4.000"/>
+            </div>
+          </div>
+          <div style={{marginTop:10}}>
+            <label className="field-label">Disponibilidad para empezar <span style={{color:'var(--muted)',fontWeight:400}}>opcional</span></label>
+            <input className="field-input" style={{marginBottom:0}} value={presEdit.availability} onChange={e=>setPresEdit(p=>({...p,availability:e.target.value}))} placeholder="Ej: Inmediata / 2 semanas / 1 mes"/>
+          </div>
+        </div>
+
+        {/* ── SECCIÓN 3: Notas del recruiter ── */}
+        <div style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:16,marginBottom:16}}>
+          <div style={{fontSize:10,letterSpacing:2,textTransform:'uppercase',color:'var(--sub)',fontWeight:600,marginBottom:12}}>3 · Notas de entrevista</div>
+          <textarea className="field-textarea" style={{marginBottom:8,minHeight:90}}
+            placeholder="Pegá la transcripción de Otter/Fathom/Zoom, o escribí tus notas de la entrevista..."
+            value={recruiterNotes} onChange={e=>setRecruiterNotes(e.target.value)}/>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <label className="btn-ghost" style={{cursor:'pointer',fontSize:11,padding:'6px 14px'}}>
+              {notesFileLoading ? 'Leyendo archivo...' : '📎 Subir archivo de notas'}
+              <input type="file" accept=".txt,.pdf,.doc,.docx" style={{display:'none'}} onChange={async(e)=>{
+                const f=e.target.files[0]; if(!f) return;
+                setNotesFileLoading(true);
+                try {
+                  if(f.name.endsWith('.txt')) {
+                    const text = await f.text();
+                    setRecruiterNotes(n => n ? n + '\n\n' + text : text);
+                  } else if(f.name.endsWith('.pdf') || f.name.endsWith('.doc') || f.name.endsWith('.docx')) {
+                    // Send to hwg-app to extract text
+                    const fd = new FormData();
+                    fd.append('file', f);
+                    const res = await fetch('https://hwg-app.vercel.app/api/extract-text', {method:'POST', body:fd});
+                    const data = await res.json();
+                    if(data.text) setRecruiterNotes(n => n ? n + '\n\n' + data.text : data.text);
+                    else alert('No se pudo leer el archivo. Probá pegando el texto directamente.');
+                  }
+                } catch(err) { alert('Error leyendo archivo: ' + err.message); }
+                setNotesFileLoading(false);
+              }}/>
+            </label>
+            {recruiterNotes && <span style={{fontSize:10,color:'var(--muted)'}}>{recruiterNotes.length} caracteres cargados</span>}
+          </div>
+          <div style={{marginTop:10}}>
+            {!cvUrl && <div style={{fontSize:11,color:'var(--warning)'}}>⚠ Sin CV cargado — Claude usará el perfil LinkedIn y estas notas</div>}
+            {cvUrl && <div style={{fontSize:11,color:'var(--lime)'}}>✓ CV disponible y será analizado por Claude</div>}
+          </div>
+        </div>
+
+        {/* ── IDIOMA ── */}
+        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
+          <div style={{fontSize:10,letterSpacing:2,textTransform:'uppercase',color:'var(--sub)',fontWeight:600}}>Idioma de salida</div>
+          <button className={`btn-ghost${lang==='es'?' active':''}`} style={{padding:'6px 14px',fontSize:11,background:lang==='es'?'var(--v)':'',color:lang==='es'?'#fff':'var(--sub)',borderColor:lang==='es'?'var(--v)':''}} onClick={()=>setLang('es')}>🇦🇷 Español</button>
+          <button className={`btn-ghost${lang==='en'?' active':''}`} style={{padding:'6px 14px',fontSize:11,background:lang==='en'?'var(--v)':'',color:lang==='en'?'#fff':'var(--sub)',borderColor:lang==='en'?'var(--v)':''}} onClick={()=>setLang('en')}>🇺🇸 English</button>
+        </div>
+
+        {/* ── GENERAR ── */}
+        {error && <div className="error-msg">{error}</div>}
+        {!result && (
+          <button className="btn-primary" style={{width:'100%',padding:14,fontSize:13}} onClick={generate} disabled={loading}>
+            {loading ? '⏳ Generando presentación...' : '✨ Generar presentación con Claude'}
+          </button>
+        )}
+
+        {/* ── RESULTADO ── */}
+        {result && (
+          <div style={{marginTop:8}}>
+            <div style={{background:'var(--v-light)',border:'1px solid #ddd6fe',borderRadius:8,padding:16,marginBottom:16}}>
+              <div style={{fontSize:10,letterSpacing:2,textTransform:'uppercase',color:'var(--v)',fontWeight:600,marginBottom:12}}>Resultado generado</div>
+
+              {/* Personal info */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+                {[
+                  ['Nombre', result.name],
+                  ['Ubicación', result.location],
+                  ['Email', result.personal?.email],
+                  ['Teléfono', result.personal?.phone],
+                  ['LinkedIn', result.personal?.linkedin],
+                  ['Posición', result.personal?.position],
+                  ['Fecha', result.personal?.presentation_date],
+                  ['Salario pretendido', result.personal?.salary],
+                  ['Disponibilidad', result.personal?.availability || result.snapshot?.avail],
+                ].filter(([,v])=>v).map(([k,v])=>(
+                  <div key={k} style={{fontSize:11}}>
+                    <span style={{color:'var(--muted)',fontSize:9,letterSpacing:1,textTransform:'uppercase'}}>{k}: </span>
+                    <span style={{color:'var(--text)',fontWeight:500}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Snapshot */}
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
+                {result.snapshot && Object.entries(result.snapshot).map(([k,v])=>(
+                  <div key={k} style={{background:'#fff',border:'1px solid #ddd6fe',borderRadius:4,padding:'4px 10px',fontSize:11}}>
+                    <span style={{color:'var(--muted)',fontSize:9}}>{k}: </span>
+                    <span style={{color:'var(--v)',fontWeight:600}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Stack técnico */}
+              {result.tools && result.tools.length > 0 && (
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:9,letterSpacing:2,textTransform:'uppercase',color:'var(--sub)',marginBottom:6}}>Stack técnico</div>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    {result.tools.map((t,i)=>(
+                      <div key={i} style={{background:'#fff',border:'1px solid #ddd6fe',borderRadius:4,padding:'3px 8px',fontSize:11}}>
+                        <strong style={{color:'var(--text)'}}>{t.tool}</strong>
+                        {t.years&&<span style={{color:'var(--muted)'}}> · {t.years}y</span>}
+                        {t.level&&<span style={{color:'var(--v-mid)'}}> · {t.level}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Storytelling */}
+              {result.storytelling && (
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:9,letterSpacing:2,textTransform:'uppercase',color:'var(--sub)',marginBottom:6}}>Por qué es fit</div>
+                  <div style={{fontSize:12,color:'var(--text)',lineHeight:1.7,background:'#fff',padding:12,borderRadius:6,border:'1px solid #ddd6fe'}}>{result.storytelling}</div>
+                </div>
+              )}
+
+              {/* Gap */}
+              {result.gap && (
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:9,letterSpacing:2,textTransform:'uppercase',color:'var(--warning)',marginBottom:6}}>Gap analysis</div>
+                  <div style={{fontSize:12,color:'var(--text)',lineHeight:1.7,background:'#fffbeb',padding:12,borderRadius:6,border:'1px solid #fde68a'}}>{result.gap}</div>
+                </div>
+              )}
+
+              {/* Extra notes */}
+              {result.extra_notes && (
+                <div>
+                  <div style={{fontSize:9,letterSpacing:2,textTransform:'uppercase',color:'var(--sub)',marginBottom:6}}>Notas del recruiter</div>
+                  <div style={{fontSize:12,color:'var(--text)',lineHeight:1.7,background:'#fff',padding:12,borderRadius:6,border:'1px solid #ddd6fe'}}>{result.extra_notes}</div>
+                </div>
+              )}
+            </div>
+
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn-primary" style={{flex:1,padding:12}} onClick={downloadWord}>⬇ Descargar Word</button>
+              <button className="btn-ghost" style={{padding:12,fontSize:11}} onClick={()=>setResult(null)}>Regenerar</button>
+              <button className="btn-ghost" style={{padding:12,fontSize:11}} onClick={onClose}>Cerrar</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function AddToPositionModal({ onClose, onSave, positions, existingPositionIds }) {
+  const [posId,setPosId]=useState(''); const [status,setStatus]=useState('sourced'); const [notes,setNotes]=useState('');
+  const available = (positions||[]).filter(p=>p.status==='active'&&!existingPositionIds.includes(p.id));
+  return (
+    <Modal title="Agregar a posición" onClose={onClose}>
+      <label className="field-label">Posición</label>
+      <select className="field-select" value={posId} onChange={e=>setPosId(e.target.value)}>
+        <option value="">Seleccionar...</option>
+        {available.map(p=><option key={p.id} value={p.id}>{p.clients?.name} — {p.role}</option>)}
+      </select>
+      <label className="field-label">Estado</label>
+      <select className="field-select" value={status} onChange={e=>setStatus(e.target.value)}>
+        {STATUSES.map(s=><option key={s} value={s}>{s.replace(/_/g,' ')}</option>)}
+      </select>
+      <label className="field-label">Notas</label>
+      <textarea className="field-textarea" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Contexto..."/>
+      <div className="modal-actions">
+        <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+        <button className="btn-primary" onClick={()=>posId&&onSave(posId,status,notes)}>Agregar</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── OWNER DASHBOARD ───────────────────────────────────────────────────────────
+function OwnerDashboard({ user, users }) {
+  const [positions,setPositions]=useState([]); const [clients,setClients]=useState([]); const [alerts,setAlerts]=useState([]); const [loading,setLoading]=useState(true);
+  useEffect(()=>{
+    (async()=>{
+      const [{data:pos},{data:cl}]=await Promise.all([
+        supabase.from('positions').select('*, clients(name)').eq('status','active').order('opened_at',{ascending:false}),
+        supabase.from('clients').select('*').eq('status','active')
+      ]);
+      setPositions(pos||[]); setClients(cl||[]);
+      const {data:apps}=await supabase.from('applications').select('*, positions(role,clients(name)), candidates(name)').not('status','in','("hired","rechazado_salario","rechazado_tech","rechazado_location")').order('last_updated',{ascending:true});
+      setAlerts((apps||[]).filter(a=>(Date.now()-new Date(a.last_updated))/3600000>=72));
+      setLoading(false);
+    })();
+  },[]);
+  if (loading) return <div className="loading">Cargando...</div>;
+  return (
+    <div>
+      <div className="page-title">Dashboard</div>
+      <div className="page-sub">Vista general HWG</div>
+      <div className="stats-row">
+        <div className="stat-card"><div className="stat-num">{positions.length}</div><div className="stat-label">Posiciones activas</div></div>
+        <div className="stat-card"><div className="stat-num">{clients.length}</div><div className="stat-label">Clientes activos</div></div>
+        <div className="stat-card"><div className="stat-num" style={{color:alerts.length>0?'#ef4444':'var(--lime)'}}>{alerts.length}</div><div className="stat-label">Alertas 72h</div></div>
+        <div className="stat-card"><div className="stat-num">{users.filter(u=>u.role==='recruiter').length}</div><div className="stat-label">Recruiters</div></div>
+      </div>
+      {alerts.length>0&&(
+        <div style={{marginBottom:32}}>
+          <div className="section-title" style={{color:'var(--warning)',marginBottom:12}}>⚠ Sin movimiento</div>
+          {alerts.map(a=>{
+            const h=Math.floor((Date.now()-new Date(a.last_updated))/3600000);
+            return (
+              <div key={a.id} className={`alert-card ${h>=96?'red':''}`}>
+                <div>
+                  <div className={`alert-text ${h>=96?'red':''}`} style={{fontWeight:600}}>{a.candidates?.name} — {a.positions?.role}</div>
+                  <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{a.positions?.clients?.name} · <StagePill status={a.status}/></div>
+                </div>
+                <HoursAgo ts={a.last_updated}/>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="section-title">Posiciones activas</div>
+      <table className="data-table">
+        <thead><tr><th>Cliente</th><th>Rol</th><th>Location</th><th>Salary</th><th>Vacantes</th><th>Estado</th></tr></thead>
+        <tbody>{positions.map(p=>(
+          <tr key={p.id}>
+            <td><span className="client-name">{p.clients?.name}</span></td>
+            <td>{p.role}</td>
+            <td style={{color:'var(--sub)',fontSize:11}}>{p.location}</td>
+            <td style={{color:'var(--lime)',fontSize:11}}>{p.salary_band}</td>
+            <td style={{fontWeight:700,color:'var(--lime)'}}>{p.vacancies}</td>
+            <td><StatusBadge status={p.status}/></td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── POSITIONS PAGE ────────────────────────────────────────────────────────────
+function PositionsPage({ user, users }) {
+  const [positions,setPositions]=useState([]); const [clients,setClients]=useState([]); const [filter,setFilter]=useState('active'); const [modal,setModal]=useState(null); const [detail,setDetail]=useState(null); const [loading,setLoading]=useState(true);
+  const load = useCallback(async()=>{
+    const [{data:pos},{data:cl}]=await Promise.all([
+      supabase.from('positions').select('*, clients(name,stakeholder)').order('opened_at',{ascending:false}),
+      supabase.from('clients').select('*').eq('status','active')
+    ]);
+    setPositions(pos||[]); setClients(cl||[]); setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const filtered = filter==='all'?positions:positions.filter(p=>p.status===filter);
+  if (detail) return <PositionDetail positionId={detail} user={user} users={users} onBack={()=>setDetail(null)} clients={clients} onRefresh={load}/>;
+  if (loading) return <div className="loading">Cargando...</div>;
+  return (
+    <div>
+      <div className="page-header">
+        <div><div className="page-title">Posiciones</div><div className="page-sub">{filtered.length} posiciones</div></div>
+        {user.role==='owner'&&<button className="btn-primary" onClick={()=>setModal('new')}>+ Nueva posición</button>}
+      </div>
+      <div className="filter-row">
+        {['active','on_hold','closed','cancelled','all'].map(s=>(
+          <div key={s} onClick={()=>setFilter(s)} style={{padding:'6px 14px',border:`1px solid ${filter===s?'var(--lime)':'#2a2a2a'}`,color:filter===s?'var(--lime)':'#555',cursor:'pointer',fontSize:10,letterSpacing:1,textTransform:'uppercase',transition:'all 0.15s'}}>{s}</div>
+        ))}
+      </div>
+      <table className="data-table">
+        <thead><tr><th>Cliente</th><th>Rol</th><th>Location</th><th>Salary</th><th>Vacantes</th><th>Estado</th><th>Abierta</th></tr></thead>
+        <tbody>{filtered.map(p=>(
+          <tr key={p.id} onClick={()=>setDetail(p.id)}>
+            <td><span className="client-name">{p.clients?.name}</span><div style={{fontSize:11,color:'var(--muted)'}}>{(()=>{ try { const sh=JSON.parse(p.clients?.stakeholder); return Array.isArray(sh)?sh[0]?.name:p.clients?.stakeholder; } catch(e){ return p.clients?.stakeholder||''; }})()}</div></td>
+            <td>{p.role}</td>
+            <td style={{color:'var(--sub)',fontSize:11}}>{p.location}</td>
+            <td style={{color:'var(--lime)',fontSize:11}}>{p.salary_band}</td>
+            <td style={{fontWeight:700,color:'var(--lime)'}}>{p.vacancies}</td>
+            <td><StatusBadge status={p.status}/></td>
+            <td style={{color:'var(--muted)',fontSize:11}}>{p.opened_at?.slice(0,10)}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+      {modal==='new'&&<PositionModal onClose={()=>setModal(null)} onSave={()=>{setModal(null);load();}} clients={clients} users={users}/>}
+    </div>
+  );
+}
+
+// ── POSITION DETAIL ───────────────────────────────────────────────────────────
+function PositionDetail({ positionId, user, users, onBack, clients, onRefresh }) {
+  const [pos,setPos]=useState(null); const [apps,setApps]=useState([]); const [modal,setModal]=useState(null); const [candProfile,setCandProfile]=useState(null); const [allPositions,setAllPositions]=useState([]);
+  const load = useCallback(async()=>{
+    const [{data:p},{data:a},{data:ap}]=await Promise.all([
+      supabase.from('positions').select('*, clients(*)').eq('id',positionId).single(),
+      supabase.from('applications').select('*, candidates(*), users(name)').eq('position_id',positionId).order('last_updated',{ascending:false}),
+      supabase.from('positions').select('*, clients(name)')
+    ]);
+    setPos(p); setApps(a||[]); setAllPositions(ap||[]);
+  },[positionId]);
+  useEffect(()=>{load();},[load]);
+  const updateStatus = async (appId, newStatus, oldStatus) => {
+    await supabase.from('applications').update({status:newStatus,last_updated:new Date().toISOString()}).eq('id',appId);
+    await supabase.from('status_history').insert([{application_id:appId,old_status:oldStatus,new_status:newStatus,changed_by:user.id}]);
+    // Auto-manage vacancies on hire
+    if (newStatus==='hired' && oldStatus!=='hired') {
+      const newVacancies = (pos.vacancies||1) - 1;
+      if (newVacancies <= 0) {
+        await supabase.from('positions').update({status:'closed',vacancies:0}).eq('id',pos.id);
+      } else {
+        await supabase.from('positions').update({vacancies:newVacancies}).eq('id',pos.id);
+      }
+    }
+    // If un-hiring (going from hired to something else), restore a vacancy
+    if (oldStatus==='hired' && newStatus!=='hired') {
+      await supabase.from('positions').update({vacancies:(pos.vacancies||0)+1, status:'active'}).eq('id',pos.id);
+    }
+    load();
+  };
+  const deletePosition = async () => {
+    if (!confirm('¿Borrar esta posición y todas sus aplicaciones?')) return;
+    await supabase.from('applications').delete().eq('position_id',pos.id);
+    await supabase.from('position_recruiters').delete().eq('position_id',pos.id);
+    await supabase.from('positions').delete().eq('id',pos.id);
+    onBack(); onRefresh();
+  };
+  if (candProfile) return <CandidateProfile candidate={candProfile} onBack={()=>setCandProfile(null)} currentUser={user} allPositions={allPositions}/>;
+  if (!pos) return <div className="loading">Cargando...</div>;
+  return (
+    <div>
+      <div className="back-btn" onClick={onBack}>← Volver a posiciones</div>
+      <div className="detail-header">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+          <div>
+            <div style={{fontSize:11,letterSpacing:2,textTransform:'uppercase',color:'var(--lime)',marginBottom:4}}>{pos.clients?.name}</div>
+            <div style={{fontSize:24,fontWeight:800,marginBottom:8}}>{pos.role}</div>
+            <StatusBadge status={pos.status}/>
+          </div>
+          {user.role==='owner'&&(
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn-ghost" onClick={()=>setModal('editPos')}>Editar</button>
+              <button className="btn-danger" onClick={deletePosition}>Borrar</button>
+            </div>
+          )}
+        </div>
+        <div className="detail-grid" style={{marginTop:20}}>
+          <div className="detail-item"><label>Location</label><span>{pos.location||'—'}</span></div>
+          <div className="detail-item"><label>Salary Band</label><span style={{color:'var(--lime)'}}>{pos.salary_band||'—'}</span></div>
+          <div className="detail-item"><label>Vacantes</label><span>{pos.vacancies}</span></div>
+          <div className="detail-item"><label>Abierta</label><span>{pos.opened_at?.slice(0,10)}</span></div>
+          <div className="detail-item"><label>Stakeholder</label><span>{(()=>{ try { const p=JSON.parse(pos.clients?.stakeholder); return Array.isArray(p)?p.map(s=>s.name).join(', '):pos.clients?.stakeholder; } catch(e){ return pos.clients?.stakeholder||'—'; }})()}</span></div>
+        </div>
+        {pos.jd&&<div style={{fontSize:11,color:'var(--muted)',padding:'12px',background:'var(--card)',border:'1px solid var(--border)',whiteSpace:'pre-wrap'}}>{pos.jd}</div>}
+      </div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div className="section-title">Candidatos ({apps.length})</div>
+        <button className="btn-primary" onClick={()=>setModal('addCand')}>+ Agregar candidato</button>
+      </div>
+      {apps.length===0
+        ? <div className="empty-state">Sin candidatos aún</div>
+        : <div className="candidates-list">
+            {apps.map(a=>(
+              <div key={a.id} className="candidate-row" style={{flexWrap:'wrap',gap:8}}>
+                <div style={{flex:1,cursor:'pointer'}} onClick={()=>setCandProfile(a.candidates)}>
+                  <div className="candidate-name" style={{color:'var(--lime)'}}>{a.candidates?.name} ↗</div>
+                  <div className="candidate-info">
+                    {a.candidates?.email&&<span>{a.candidates.email} · </span>}
+                    <span style={{color:'var(--sub)'}}>{a.users?.name}</span>
+                  </div>
+                  {a.notes&&<div style={{fontSize:11,color:'var(--sub)',marginTop:4,fontStyle:'italic'}}>"{a.notes}"</div>}
+                  <div style={{marginTop:4}}><HoursAgo ts={a.last_updated}/></div>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <select style={{background:'var(--bg)',border:'1px solid var(--border)',color:'var(--text)',padding:'6px 10px',fontFamily:'Inter',fontSize:11,outline:'none',cursor:'pointer'}}
+                    value={a.status} onChange={e=>updateStatus(a.id,e.target.value,a.status)}>
+                    {STATUSES.map(s=><option key={s} value={s}>{s.replace(/_/g,' ')}</option>)}
+                  </select>
+                  {a.candidates?.cv_url&&<a href={a.candidates.cv_url} target="_blank" rel="noopener noreferrer" style={{fontSize:10,color:'var(--lime)',textDecoration:'none',border:'1px solid var(--lime)',padding:'4px 8px'}}>CV</a>}
+                  {a.candidates?.linkedin_url&&<a href={`https://${a.candidates.linkedin_url.replace('https://','')}`} target="_blank" rel="noopener noreferrer" style={{fontSize:10,color:'#3b82f6',textDecoration:'none',border:'1px solid #3b82f6',padding:'4px 8px'}}>LI</a>}
+                </div>
+              </div>
+            ))}
+          </div>
+      }
+      {modal==='addCand'&&<CandidateModal onClose={()=>setModal(null)} onSave={()=>{setModal(null);load();}} positions={[pos]} currentUser={user}/>}
+      {modal==='editPos'&&<PositionModal onClose={()=>setModal(null)} onSave={()=>{setModal(null);load();onRefresh();}} initial={pos} clients={clients} users={users}/>}
+    </div>
+  );
+}
+
+// ── CLIENTS PAGE ──────────────────────────────────────────────────────────────
+function ClientsPage({ user, users }) {
+  const [clients,setClients]=useState([]); const [modal,setModal]=useState(null); const [editing,setEditing]=useState(null); const [loading,setLoading]=useState(true); const [profile,setProfile]=useState(null);
+  const load = useCallback(async()=>{ const {data}=await supabase.from('clients').select('*').order('name'); setClients(data||[]); setLoading(false); },[]);
+  useEffect(()=>{load();},[load]);
+  const deleteClient = async (c,e) => {
+    e.stopPropagation();
+    if (!confirm(`¿Borrar cliente ${c.name}?`)) return;
+    await supabase.from('clients').delete().eq('id',c.id);
+    load();
+  };
+  const parseFirstSH = (raw) => {
+    if (!raw) return '—';
+    try { const p=JSON.parse(raw); return Array.isArray(p)&&p.length?p[0].name:raw; }
+    catch(e) { return raw; }
+  };
+  if (profile) return <ClientView user={{name:profile.name, id:profile.id}} onBack={()=>setProfile(null)}/>;
+  if (loading) return <div className="loading">Cargando...</div>;
+  return (
+    <div>
+      <div className="page-header">
+        <div><div className="page-title">Clientes</div><div className="page-sub">{clients.length} clientes</div></div>
+        {user.role==='owner'&&<button className="btn-primary" onClick={()=>{setEditing(null);setModal('new')}}>+ Nuevo cliente</button>}
+      </div>
+      <table className="data-table">
+        <thead><tr><th>Empresa</th><th>Stakeholder principal</th><th>Estado</th><th></th></tr></thead>
+        <tbody>{clients.map(c=>(
+          <tr key={c.id} onClick={()=>setProfile(c)} style={{cursor:'pointer'}}>
+            <td><span className="client-name">{c.name}</span></td>
+            <td style={{color:'var(--muted)',fontSize:12}}>{parseFirstSH(c.stakeholder)}</td>
+            <td><StatusBadge status={c.status}/></td>
+            <td onClick={e=>e.stopPropagation()}>
+              {user.role==='owner'&&(
+                <div style={{display:'flex',gap:6}}>
+                  <button className="btn-ghost" style={{padding:'4px 10px',fontSize:10}} onClick={e=>{e.stopPropagation();setEditing(c);setModal('edit')}}>Editar</button>
+                  <button className="btn-danger" style={{padding:'4px 10px',fontSize:10}} onClick={e=>deleteClient(c,e)}>Borrar</button>
+                </div>
+              )}
+            </td>
+          </tr>
+        ))}</tbody>
+      </table>
+      {(modal==='new'||modal==='edit')&&<ClientModal onClose={()=>setModal(null)} onSave={()=>{setModal(null);load();}} initial={editing}/>}
+    </div>
+  );
+}
+
+// ── CANDIDATES PAGE ───────────────────────────────────────────────────────────
+function CandidatesPage({ user, users }) {
+  const [candidates,setCandidates]=useState([]); const [positions,setPositions]=useState([]); const [modal,setModal]=useState(false); const [loading,setLoading]=useState(true); const [search,setSearch]=useState(''); const [profile,setProfile]=useState(null);
+  const load = useCallback(async()=>{
+    const [{data:c},{data:p}]=await Promise.all([
+      supabase.from('candidates').select('*').order('created_at',{ascending:false}),
+      supabase.from('positions').select('*, clients(name)')
+    ]);
+    setCandidates(c||[]); setPositions(p||[]); setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const filtered = candidates.filter(c=>!search||c.name?.toLowerCase().includes(search.toLowerCase())||c.email?.toLowerCase().includes(search.toLowerCase()));
+  const deleteCandidate = async (c,e) => {
+    e.stopPropagation();
+    if (!confirm(`¿Borrar candidato ${c.name}?`)) return;
+    await supabase.from('applications').delete().eq('candidate_id',c.id);
+    await supabase.from('candidates').delete().eq('id',c.id);
+    load();
+  };
+  if (profile) return <CandidateProfile candidate={profile} onBack={()=>setProfile(null)} currentUser={user} allPositions={positions}/>;
+  if (loading) return <div className="loading">Cargando...</div>;
+  return (
+    <div>
+      <div className="page-header">
+        <div><div className="page-title">Talent Pool</div><div className="page-sub">{candidates.length} candidatos</div></div>
+        <button className="btn-primary" onClick={()=>setModal(true)}>+ Agregar candidato</button>
+      </div>
+      <div className="filter-row">
+        <input className="filter-select" placeholder="Buscar por nombre o email..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:280}}/>
+      </div>
+      <table className="data-table">
+        <thead><tr><th>Nombre</th><th>Email</th><th>Teléfono</th><th>LinkedIn</th><th>CV</th><th></th></tr></thead>
+        <tbody>{filtered.map(c=>(
+          <tr key={c.id} onClick={()=>setProfile(c)}>
+            <td><span className="client-name">{c.name}</span></td>
+            <td style={{color:'var(--sub)',fontSize:11}}>{c.email||'—'}</td>
+            <td style={{color:'var(--sub)',fontSize:11}}>{c.phone||'—'}</td>
+            <td>{c.linkedin_url?<a href={`https://${c.linkedin_url.replace('https://','')}`} target="_blank" rel="noopener noreferrer" style={{color:'#3b82f6',fontSize:11,textDecoration:'none'}} onClick={e=>e.stopPropagation()}>Ver perfil</a>:<span style={{color:'var(--text)'}}>—</span>}</td>
+            <td>{c.cv_url?<a href={c.cv_url} target="_blank" rel="noopener noreferrer" style={{color:'var(--lime)',fontSize:11,textDecoration:'none'}} onClick={e=>e.stopPropagation()}>Descargar</a>:<span style={{color:'var(--text)'}}>—</span>}</td>
+            <td onClick={e=>e.stopPropagation()}>
+              <button className="btn-danger" style={{padding:'4px 10px',fontSize:10}} onClick={e=>deleteCandidate(c,e)}>Borrar</button>
+            </td>
+          </tr>
+        ))}</tbody>
+      </table>
+      {modal&&<CandidateModal onClose={()=>setModal(false)} onSave={()=>{setModal(false);load();}} positions={positions} currentUser={user}/>}
+    </div>
+  );
+}
+
+// ── RECRUITER PROFILE ─────────────────────────────────────────────────────────
+function RecruiterPositionsView({ user, onBack }) {
+  const [positions,setPositions]=useState([]);
+  const [clients,setClients]=useState([]);
+  const [allUsers,setAllUsers]=useState([]);
+  const [apps,setApps]=useState([]);
+  const [detail,setDetail]=useState(null);
+  const [candProfile,setCandProfile]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [allPositions,setAllPositions]=useState([]);
+
+  useEffect(()=>{
+    (async()=>{
+      const {data:pr}=await supabase.from('position_recruiters').select('position_id').eq('recruiter_id',user.id);
+      const ids=(pr||[]).map(p=>p.position_id);
+      const [{data:cl},{data:us},{data:ap},{data:allPos}]=await Promise.all([
+        supabase.from('clients').select('*'),
+        supabase.from('users').select('*'),
+        supabase.from('applications').select('*, candidates(*), positions(role,status,clients(name))').eq('recruiter_id',user.id).order('last_updated',{ascending:false}),
+        supabase.from('positions').select('*, clients(name)')
+      ]);
+      if (ids.length) {
+        const {data:pos}=await supabase.from('positions').select('*, clients(name,stakeholder)').in('id',ids).order('opened_at',{ascending:false});
+        setPositions(pos||[]);
+      }
+      setClients(cl||[]); setAllUsers(us||[]); setApps(ap||[]); setAllPositions(allPos||[]);
+      setLoading(false);
+    })();
+  },[user.id]);
+
+  if (detail) return <PositionDetail positionId={detail} user={{role:'owner',id:user.id}} users={allUsers} onBack={()=>setDetail(null)} clients={clients} onRefresh={()=>{}}/>;
+  if (candProfile) return <CandidateProfile candidate={candProfile} onBack={()=>setCandProfile(null)} currentUser={{role:'owner',id:user.id}} allPositions={allPositions}/>;
+  if (loading) return <div className="loading">Cargando...</div>;
+
+  const hired = apps.filter(a=>a.status==='hired');
+  const active = apps.filter(a=>!['hired','rechazado_salario','rechazado_tech','rechazado_location'].includes(a.status));
+  const daysSince = user.created_at ? Math.floor((Date.now()-new Date(user.created_at))/86400000) : null;
+
+  return (
+    <div>
+      <div className="back-btn" onClick={onBack}>← Volver al equipo</div>
+
+      <div className="detail-header">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+          <div>
+            <div className="page-title">{user.name}</div>
+            <div style={{fontSize:11,color:'var(--muted)',marginTop:4,letterSpacing:1}}>
+              {user.email}
+              {daysSince!==null && <span style={{marginLeft:12}}>· Alta hace {daysSince} días</span>}
+            </div>
+          </div>
+          <span className="badge badge-active">recruiter</span>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16,marginTop:24}}>
           {[
-            [personalLabels.position, 'position'],
-            [personalLabels.date, null],
-            [personalLabels.linkedin, 'linkedin'],
-            [personalLabels.phone, 'phone'],
-            [personalLabels.email, 'email'],
-          ].map(([label, key], i) => (
-            <div key={i} style={{display:'flex',gap:12,padding:'10px 0',borderBottom:'1px solid #f0f0f0',alignItems:'center'}}>
-              <span style={{fontWeight:700,minWidth:170,fontSize:14,color:'#374151',flexShrink:0}}>{label}</span>
-              {key
-                ? <input style={inputStyle} value={personal[key]} onChange={e=>updatePersonal(key, e.target.value)} />
-                : <span style={{fontSize:14,color:'#0F0F0F'}}>{today}</span>
-              }
+            {num:positions.length,label:'Posiciones asignadas'},
+            {num:apps.length,label:'Candidatos totales'},
+            {num:active.length,label:'Candidatos activos'},
+            {num:hired.length,label:'Hires cerrados',highlight:true},
+          ].map(s=>(
+            <div key={s.label} style={{background:'var(--card)',border:'1px solid var(--border)',padding:'16px 20px'}}>
+              <div style={{fontSize:28,fontWeight:800,color:s.highlight?'var(--lime)':'#f0f0f0',lineHeight:1}}>{s.num}</div>
+              <div style={{fontSize:10,color:'var(--muted)',letterSpacing:2,textTransform:'uppercase',marginTop:6}}>{s.label}</div>
             </div>
           ))}
+        </div>
+      </div>
 
-          {sectionPill('Quick Snapshot')}
-          {[
-            [labels.techFit, data.snapshot.techFit],
-            [labels.exp,     data.snapshot.exp],
-            [labels.cult,    data.snapshot.cult],
-            [labels.lang,    data.snapshot.lang],
-            [labels.avail,   data.snapshot.avail],
-            [labels.salary,  data.snapshot.salary],
-          ].map(([l,v],i) => <SnapRow key={i} label={l} value={v} />)}
-
-          {sectionPill(labels.tools)}
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:14,marginBottom:8}}>
-            <thead>
-              <tr style={{borderBottom:'2px solid #6C3BFF'}}>
-                {[labels.tool, labels.years, labels.level].map((h,i)=>(
-                  <th key={i} style={{textAlign:i===1?'center':'left',padding:'6px 10px',color:'#888',fontWeight:600,fontSize:12}}>{h}</th>
-                ))}
+      <div className="section-title" style={{marginBottom:12}}>Posiciones asignadas ({positions.length})</div>
+      {positions.length===0
+        ? <div className="empty-state" style={{marginBottom:32}}>Sin posiciones asignadas</div>
+        : <table className="data-table" style={{marginBottom:36}}>
+            <thead><tr><th>Cliente</th><th>Rol</th><th>Location</th><th>Estado</th></tr></thead>
+            <tbody>{positions.map(p=>(
+              <tr key={p.id} onClick={()=>setDetail(p.id)} style={{cursor:'pointer'}}>
+                <td><span className="client-name">{p.clients?.name}</span></td>
+                <td>{p.role}</td>
+                <td style={{color:'var(--sub)',fontSize:11}}>{p.location}</td>
+                <td><StatusBadge status={p.status}/></td>
               </tr>
-            </thead>
-            <tbody>
-              {data.tools.map((row,i)=>(
-                <tr key={i} style={{background:i%2===0?'#F9F6F1':'#fff'}}>
-                  <td style={{padding:'9px 10px',fontWeight:700}}>{row.tool}</td>
-                  <td style={{padding:'9px 10px',textAlign:'center',color:'#6C3BFF',fontWeight:700}}>{row.years}</td>
-                  <td style={{padding:'9px 10px',color:'#6b7280'}}>{row.level}</td>
-                </tr>
-              ))}
-            </tbody>
+            ))}</tbody>
           </table>
+      }
 
-          {sectionPill(labels.why)}
-          <div style={{background:'#F9F6F1',borderLeft:'4px solid #C8F135',padding:'14px 18px',borderRadius:'0 8px 8px 0',fontSize:15,lineHeight:1.7,color:'#374151',fontStyle:'italic',marginBottom:20}}>
-            {data.why}
+      {hired.length>0&&(
+        <>
+          <div className="section-title" style={{marginBottom:12,color:'var(--lime)'}}>✓ Hires cerrados ({hired.length})</div>
+          <div className="candidates-list" style={{marginBottom:36}}>
+            {hired.map(a=>(
+              <div key={a.id} className="candidate-row" style={{cursor:'pointer'}} onClick={()=>setCandProfile(a.candidates)}>
+                <div>
+                  <div className="candidate-name" style={{color:'var(--lime)'}}>{a.candidates?.name} ↗</div>
+                  <div className="candidate-info">{a.positions?.clients?.name} — {a.positions?.role}</div>
+                </div>
+                <StagePill status="hired"/>
+              </div>
+            ))}
           </div>
+        </>
+      )}
 
-          <div style={{textAlign:'center',borderTop:'1px solid #ebebeb',paddingTop:16}}>
-            <div style={{color:'#999',fontSize:13}}>
-              {isEs ? 'Presentado por' : 'Presented by'} <strong style={{color:'#0F0F0F'}}>HWG Talent Consultants</strong> · {today}
-            </div>
-            <div style={{color:'#6C3BFF',fontWeight:700,fontSize:13,marginTop:2}}>www.hwgtalent.com</div>
+      {active.length>0&&(
+        <>
+          <div className="section-title" style={{marginBottom:12}}>Candidatos activos ({active.length})</div>
+          <div className="candidates-list">
+            {active.map(a=>(
+              <div key={a.id} className="candidate-row" style={{cursor:'pointer'}} onClick={()=>setCandProfile(a.candidates)}>
+                <div style={{flex:1}}>
+                  <div className="candidate-name">{a.candidates?.name} ↗</div>
+                  <div className="candidate-info">{a.positions?.clients?.name} — {a.positions?.role}</div>
+                  <div style={{marginTop:4}}><HoursAgo ts={a.last_updated}/></div>
+                </div>
+                <StagePill status={a.status}/>
+              </div>
+            ))}
           </div>
-        </div>
-      );
-    }
+        </>
+      )}
+    </div>
+  );
+}
 
-    function App() {
-      const params = new URLSearchParams(window.location.search);
-      const [lang, setLang] = useState('es');
-      const [file, setFile] = useState(null);
-      const [fileText, setFileText] = useState('');
-      const [notes, setNotes] = useState(params.get('notes')||'');
-      const [position, setPosition] = useState(params.get('position')||'');
-      const [interview, setInterview] = useState(null);
-      const [drag, setDrag] = useState(false);
-      const [dragInterview, setDragInterview] = useState(false);
-      const [loading, setLoading] = useState(false);
-      const [result, setResult] = useState(null);
-      const [error, setError] = useState(null);
-      const fileRef = useRef();
-      const interviewRef = useRef();
+// ── USERS PAGE ────────────────────────────────────────────────────────────────
+function UsersPage({ onRefresh }) {
+  const [users,setUsers]=useState([]); const [modal,setModal]=useState(false); const [form,setForm]=useState({name:'',email:'',role:'recruiter',password:''}); const [selected,setSelected]=useState(null);
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const load = async()=>{ const {data}=await supabase.from('users').select('*').order('role').order('name'); setUsers(data||[]); };
+  useEffect(()=>{load();},[]);
+  const save = async()=>{
+    if (!form.name||!form.email||!form.password) return;
+    await supabase.from('users').insert([form]);
+    setModal(false); setForm({name:'',email:'',role:'recruiter',password:''}); load(); onRefresh();
+  };
+  const deleteUser = async(u,e)=>{ e.stopPropagation(); if(!confirm(`¿Borrar ${u.name}?`)) return; await supabase.from('users').delete().eq('id',u.id); load(); onRefresh(); };
+  if (selected?.role==='recruiter') return <RecruiterPositionsView user={selected} onBack={()=>setSelected(null)}/>;
+  if (selected?.role==='client') return <ClientView user={selected} onBack={()=>setSelected(null)}/>;
+  const owners=users.filter(u=>u.role==='owner'); const recruiters=users.filter(u=>u.role==='recruiter'); const clients=users.filter(u=>u.role==='client');
+  const Group=({title,list,clickable})=>list.length===0?null:(
+    <>
+      <div className="section-title" style={{marginBottom:12}}>{title}</div>
+      <table className="data-table" style={{marginBottom:32}}>
+        <thead><tr><th>Nombre</th><th>Email</th>{clickable&&<th></th>}<th></th></tr></thead>
+        <tbody>{list.map(u=>(
+          <tr key={u.id} onClick={clickable?()=>setSelected(u):undefined} style={clickable?{cursor:'pointer'}:{}}>
+            <td><span className="client-name">{u.name}</span></td>
+            <td style={{color:'var(--sub)',fontSize:11}}>{u.email}</td>
+            {clickable&&<td style={{color:'var(--lime)',fontSize:11}}>Ver perfil →</td>}
+            <td onClick={e=>e.stopPropagation()}><button className="btn-danger" style={{padding:'3px 8px',fontSize:10}} onClick={e=>deleteUser(u,e)}>Borrar</button></td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </>
+  );
+  return (
+    <div>
+      <div className="page-header">
+        <div><div className="page-title">Equipo</div><div className="page-sub">{users.length} usuarios</div></div>
+        <button className="btn-primary" onClick={()=>setModal(true)}>+ Nuevo usuario</button>
+      </div>
+      <Group title="Owners" list={owners} clickable={false}/>
+      <Group title="Recruiters" list={recruiters} clickable={true}/>
+      <Group title="Clientes" list={clients} clickable={true}/>
+      {modal&&(
+        <Modal title="Nuevo usuario" onClose={()=>setModal(false)}>
+          <label className="field-label">Nombre</label><input className="field-input" value={form.name} onChange={e=>set('name',e.target.value)} placeholder="Juan Pérez"/>
+          <label className="field-label">Email</label><input className="field-input" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="juan@hwg.com" type="email"/>
+          <label className="field-label">Rol</label>
+          <select className="field-select" value={form.role} onChange={e=>set('role',e.target.value)}>
+            <option value="owner">Owner</option><option value="recruiter">Recruiter</option><option value="client">Client</option>
+          </select>
+          <label className="field-label">Contraseña</label><input className="field-input" value={form.password} onChange={e=>set('password',e.target.value)} placeholder="••••••••" type="password"/>
+          <div className="modal-actions">
+            <button className="btn-ghost" onClick={()=>setModal(false)}>Cancelar</button>
+            <button className="btn-primary" onClick={save}>Guardar</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
 
-      const readFile = useCallback(async (f) => {
-        setFile(f); setResult(null);
-        if (f.type === 'application/pdf' || f.name.endsWith('.pdf')) {
-          try {
-            const pdfjsLib = window['pdfjs-dist/build/pdf'];
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-            const arrayBuffer = await f.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            let fullText = '';
-            for (let i = 1; i <= pdf.numPages; i++) {
-              const page = await pdf.getPage(i);
-              const content = await page.getTextContent();
-              fullText += content.items.map(item => item.str).join(' ') + '\n';
-            }
-            setFileText(fullText || `[Archivo: ${f.name}]`);
-          } catch(e) {
-            setFileText(`[Archivo: ${f.name} — no se pudo leer el PDF]`);
-          }
-        } else {
-          const text = await f.text().catch(() => '');
-          setFileText(text || `[Archivo: ${f.name}]`);
-        }
-      }, []);
+// ── CLIENT VIEW ───────────────────────────────────────────────────────────────
+function ClientView({ user, onBack }) {
+  const [client,setClient]=useState(null);
+  const [positions,setPositions]=useState([]);
+  const [recruiters,setRecruiters]=useState([]);
+  const [detail,setDetail]=useState(null);
+  const [allUsers,setAllUsers]=useState([]);
+  const [loading,setLoading]=useState(true);
 
-      const onDrop = useCallback((e) => {
-        e.preventDefault(); setDrag(false);
-        const f = e.dataTransfer.files[0];
-        if (f) readFile(f);
-      }, [readFile]);
+  const parseStakeholders = (raw) => {
+    if (!raw) return [];
+    try { const p=JSON.parse(raw); return Array.isArray(p)?p:[{name:raw,contact:''}]; }
+    catch(e) { return [{name:raw,contact:''}]; }
+  };
 
-      const generate = async () => {
-        if (!file) { setError(lang === 'es' ? 'Por favor subí un CV antes de continuar.' : 'Please upload a CV before continuing.'); return; }
-        setError(null); setLoading(true); setResult(null);
+  useEffect(()=>{
+    (async()=>{
+      // find client record — either by direct client_id (owner view) or by matching user name
+      let cl = null;
+      if (user.client_id) {
+        const {data} = await supabase.from('clients').select('*').eq('id',user.client_id).single();
+        cl = data;
+      } else {
+        const {data} = await supabase.from('clients').select('*').eq('name',user.name).single();
+        cl = data;
+      }
+      if (!cl) { setLoading(false); return; }
+      setClient(cl);
 
-        try {
-          const formData = new FormData();
-          formData.append('cv', file);
-          formData.append('notes', notes);
-          formData.append('lang', lang);
-          formData.append('position', position);
-          if (interview) formData.append('interview', interview);
+      const [{data:pos},{data:us}] = await Promise.all([
+        supabase.from('positions').select('*, applications(*, candidates(name), users(name)), position_recruiters(recruiter_id, users(name))').eq('client_id',cl.id).order('opened_at',{ascending:false}),
+        supabase.from('users').select('*')
+      ]);
+      setPositions(pos||[]);
+      setAllUsers(us||[]);
 
-          const res = await fetch('/api/generate', {
-            method: 'POST',
-            body: formData
-          });
-          const data = await res.json();
-          if (data.error) throw new Error(data.error);
-          const raw = (data.content||[]).map(c=>c.text||'').join('').replace(/```json|```/g,'').trim();
-          const parsed = JSON.parse(raw);
-          if (!parsed.personal) parsed.personal = {};
-          parsed.personal.position = position || '[COMPLETAR]';
-          setResult(parsed);
-        } catch(e) {
-          setError(e.message || 'Hubo un error al procesar el CV. Intentá de nuevo.');
-        } finally { setLoading(false); }
-      };
-
-      const btnStyle = (active) => ({
-        flex:1, padding:'12px', borderRadius:10,
-        border: active ? '2px solid #6C3BFF' : '2px solid #ebebeb',
-        background: active ? '#F0EBFF' : '#fff',
-        color: active ? '#6C3BFF' : '#666',
-        fontWeight: active ? 700 : 400,
-        fontSize:15, cursor:'pointer', fontFamily:'DM Sans,sans-serif', transition:'all 0.15s'
+      // gather unique recruiters across all positions
+      const recMap = {};
+      (pos||[]).forEach(p=>{
+        (p.position_recruiters||[]).forEach(pr=>{
+          if (pr.users) recMap[pr.recruiter_id] = pr.users.name;
+        });
       });
+      setRecruiters(Object.entries(recMap).map(([id,name])=>({id,name})));
+      setLoading(false);
+    })();
+  },[user.name, user.client_id]);
 
-      return (
-        <div style={{minHeight:'100vh',background:'#F9F6F1'}}>
-          <div style={{background:'#0F0F0F',padding:'18px 40px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-            <div style={{fontFamily:"'DM Serif Display',serif",fontWeight:700,fontSize:22,color:'#fff'}}>
-              <span style={{color:'#C8F135'}}>HWG</span> Talent Consultants
+  if (detail) return <PositionDetail positionId={detail} user={{role: onBack?'owner':'client', id:user.id}} users={allUsers} onBack={()=>setDetail(null)} clients={client?[client]:[]} onRefresh={()=>{}}/>;
+  if (loading) return <div className="loading">Cargando...</div>;
+  if (!client) return <div className="empty-state">Cliente no encontrado</div>;
+
+  const stakeholders = parseStakeholders(client.stakeholder);
+  const active = positions.filter(p=>p.status==='active');
+  const onHold = positions.filter(p=>p.status==='on_hold');
+  const closed = positions.filter(p=>['closed','cancelled'].includes(p.status));
+  const totalHires = positions.reduce((acc,p)=>(
+    acc + (p.applications||[]).filter(a=>a.status==='hired').length
+  ),0);
+  const daysSince = client.created_at ? Math.floor((Date.now()-new Date(client.created_at))/86400000) : null;
+
+  const PositionBlock = ({title, list, color}) => list.length===0?null:(
+    <div style={{marginBottom:36}}>
+      <div className="section-title" style={{marginBottom:12,color:color||'#f0f0f0'}}>{title} ({list.length})</div>
+      <table className="data-table">
+        <thead><tr><th>Rol</th><th>Recruiters</th><th>Candidatos</th><th>Hires</th><th>Abierta</th><th>Estado</th></tr></thead>
+        <tbody>{list.map(p=>{
+          const recs=(p.position_recruiters||[]).map(pr=>pr.users?.name).filter(Boolean);
+          const hires=(p.applications||[]).filter(a=>a.status==='hired').length;
+          return (
+            <tr key={p.id} onClick={()=>setDetail(p.id)} style={{cursor:'pointer'}}>
+              <td><span className="client-name">{p.role}</span><div style={{fontSize:11,color:'var(--muted)'}}>{p.location}</div></td>
+              <td style={{fontSize:11,color:'var(--muted)'}}>{recs.join(', ')||'—'}</td>
+              <td style={{fontWeight:600,color:'var(--lime)'}}>{(p.applications||[]).length}</td>
+              <td style={{fontWeight:700,color:hires>0?'var(--lime)':'#444'}}>{hires||'—'}</td>
+              <td style={{color:'var(--muted)',fontSize:11}}>{p.opened_at?.slice(0,10)}</td>
+              <td><StatusBadge status={p.status}/></td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <div>
+      {onBack&&<div className="back-btn" onClick={onBack}>← Volver al equipo</div>}
+
+      <div className="detail-header">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+          <div>
+            <div className="page-title">{client.name}</div>
+            <div style={{fontSize:11,color:'var(--muted)',marginTop:4,letterSpacing:1}}>
+              {daysSince!==null&&<span>Cliente desde hace {daysSince} días</span>}
             </div>
-            <div style={{color:'#666',fontSize:13}}>CV → Presentación</div>
           </div>
+          <StatusBadge status={client.status}/>
+        </div>
 
-          <div style={{maxWidth:760,margin:'0 auto',padding:'48px 24px 80px'}}>
-            <div style={{fontFamily:"'DM Serif Display',serif",fontSize:'clamp(28px,5vw,40px)',fontWeight:800,lineHeight:1.1,marginBottom:12}}>
-              CV → Presentación<br/><span style={{color:'#6C3BFF'}}>en 10 segundos.</span>
+        {/* Stats */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16,marginTop:24,marginBottom:client.notes?20:0}}>
+          {[
+            {num:positions.length, label:'Posiciones totales'},
+            {num:active.length, label:'Posiciones activas'},
+            {num:recruiters.length, label:'Recruiters asignados'},
+            {num:totalHires, label:'Hires cerrados', highlight:true},
+          ].map(s=>(
+            <div key={s.label} style={{background:'var(--card)',border:'1px solid var(--border)',padding:'16px 20px'}}>
+              <div style={{fontSize:28,fontWeight:800,color:s.highlight?'var(--lime)':'#f0f0f0',lineHeight:1}}>{s.num}</div>
+              <div style={{fontSize:10,color:'var(--muted)',letterSpacing:2,textTransform:'uppercase',marginTop:6}}>{s.label}</div>
             </div>
-            <div style={{color:'#666',fontSize:16,marginBottom:40,lineHeight:1.6}}>
-              Subí el CV, elegí el idioma, y la presentación HWG sale lista.
-            </div>
+          ))}
+        </div>
 
-            {position && (
-              <div style={{background:'#F0EBFF',border:'1.5px solid #6C3BFF',borderRadius:12,padding:'12px 18px',marginBottom:20,display:'flex',alignItems:'center',gap:10}}>
-                <span style={{fontSize:13,color:'#6C3BFF',fontWeight:700}}>📌 Posición precargada desde el ATS:</span>
-                <span style={{fontSize:13,color:'#374151',fontWeight:600}}>{position}</span>
+        {/* Notes */}
+        {client.notes&&<div style={{fontSize:12,color:'var(--sub)',padding:'12px 16px',background:'var(--card)',border:'1px solid var(--border)',marginTop:16}}>{client.notes}</div>}
+      </div>
+
+      {/* Stakeholders */}
+      {stakeholders.length>0&&(
+        <div style={{marginBottom:32}}>
+          <div className="section-title" style={{marginBottom:12}}>Stakeholders</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:12}}>
+            {stakeholders.map((s,i)=>(
+              <div key={i} style={{background:'var(--card)',border:'1px solid var(--border)',padding:'14px 18px'}}>
+                <div style={{fontWeight:600,fontSize:13}}>{s.name}</div>
+                {s.contact&&<div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>{s.contact}</div>}
               </div>
-            )}
-
-            <div style={{background:'#fff',borderRadius:16,padding:28,marginBottom:20,border:'1.5px solid #ebebeb'}}>
-              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#6C3BFF',marginBottom:14}}>Idioma de salida</div>
-              <div style={{display:'flex',gap:12}}>
-                <button style={btnStyle(lang==='es')} onClick={()=>setLang('es')}>🇦🇷 Español</button>
-                <button style={btnStyle(lang==='en')} onClick={()=>setLang('en')}>🇺🇸 English</button>
-              </div>
-            </div>
-
-            <div style={{background:'#fff',borderRadius:16,padding:28,marginBottom:20,border:'1.5px solid #ebebeb'}}>
-              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#6C3BFF',marginBottom:14}}>CV</div>
-              <div
-                style={{border:`2px dashed ${drag?'#6C3BFF':'#d0d0d0'}`,borderRadius:12,padding:'36px 20px',textAlign:'center',background:drag?'#F0EBFF':'#F9F6F1',cursor:'pointer',transition:'all 0.2s'}}
-                onDragOver={e=>{e.preventDefault();setDrag(true)}}
-                onDragLeave={()=>setDrag(false)}
-                onDrop={onDrop}
-                onClick={()=>fileRef.current.click()}
-              >
-                <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{display:'none'}} onChange={e=>e.target.files[0]&&readFile(e.target.files[0])}/>
-                <div style={{fontSize:32,marginBottom:8}}>📄</div>
-                {file
-                  ? <span style={{display:'inline-flex',alignItems:'center',gap:8,background:'#F0EBFF',color:'#6C3BFF',padding:'6px 14px',borderRadius:20,fontSize:13,fontWeight:700}}>✓ {file.name}</span>
-                  : <div style={{color:'#666',fontSize:14,lineHeight:1.6}}>Arrastrá el archivo acá o <strong style={{color:'#6C3BFF'}}>hacé click para seleccionar</strong><br/><span style={{fontSize:12,color:'#aaa'}}>PDF, Word o TXT</span></div>
-                }
-              </div>
-
-              <div style={{marginTop:20}}>
-                <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#999',marginBottom:10}}>
-                  Entrevista <span style={{fontWeight:400,textTransform:'none',letterSpacing:0,color:'#bbb'}}>— opcional</span>
-                </div>
-                <div
-                  style={{border:`2px dashed ${dragInterview?'#6C3BFF':'#e0e0e0'}`,borderRadius:12,padding:'20px',textAlign:'center',background:dragInterview?'#F0EBFF':'#F9F6F1',cursor:'pointer',transition:'all 0.2s'}}
-                  onDragOver={e=>{e.preventDefault();setDragInterview(true)}}
-                  onDragLeave={()=>setDragInterview(false)}
-                  onDrop={e=>{e.preventDefault();setDragInterview(false);const f=e.dataTransfer.files[0];if(f)setInterview(f);}}
-                  onClick={()=>interviewRef.current.click()}
-                >
-                  <input ref={interviewRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{display:'none'}} onChange={e=>e.target.files[0]&&setInterview(e.target.files[0])}/>
-                  {interview
-                    ? <span style={{display:'inline-flex',alignItems:'center',gap:8,background:'#F0EBFF',color:'#6C3BFF',padding:'6px 14px',borderRadius:20,fontSize:13,fontWeight:700}}>✓ {interview.name} <span onClick={e=>{e.stopPropagation();setInterview(null);}} style={{cursor:'pointer',color:'#999',fontWeight:400}}>✕</span></span>
-                    : <div style={{color:'#aaa',fontSize:13}}>📋 Subí la entrevista en PDF o Word</div>
-                  }
-                </div>
-              </div>
-
-              <div style={{marginTop:20}}>
-                <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#6C3BFF',marginBottom:10}}>
-                  Posición para la que se presenta <span style={{fontWeight:400,textTransform:'none',letterSpacing:0,color:'#bbb'}}>— opcional</span>
-                </div>
-                <input
-                  type="text"
-                  value={position}
-                  onChange={e=>setPosition(e.target.value)}
-                  placeholder="Ej: Data Analyst Senior · Empresa XYZ"
-                  style={{width:'100%',padding:'12px 14px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:14,fontFamily:'DM Sans,sans-serif',boxSizing:'border-box',outline:'none',marginBottom:16}}
-                />
-                <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#999',marginBottom:10}}>
-                  Notas o contexto adicional <span style={{fontWeight:400,textTransform:'none',letterSpacing:0,color:'#bbb'}}>— opcional</span>
-                </div>
-                <textarea
-                  style={{width:'100%',minHeight:100,padding:14,border:'1.5px dashed #e0e0e0',borderRadius:10,fontSize:14,lineHeight:1.6,resize:'vertical',fontFamily:'DM Sans,sans-serif',color:'#0F0F0F',background:'#F9F6F1',outline:'none'}}
-                  placeholder={lang==='es' ? 'Ej: Lo conozco de una búsqueda anterior, es muy proactivo. Busca proyecto con impacto real...' : 'E.g.: I know him from a previous search, very proactive. Looking for real impact...'}
-                  value={notes}
-                  onChange={e=>setNotes(e.target.value)}
-                />
-              </div>
-
-              {error && <div style={{background:'#fff0f0',border:'1.5px solid #fca5a5',borderRadius:10,padding:'14px 18px',color:'#991b1b',fontSize:14,marginTop:16}}>{error}</div>}
-
-              <button
-                onClick={generate}
-                disabled={loading}
-                style={{width:'100%',padding:18,background:loading?'#ccc':'#0F0F0F',color:loading?'#888':'#C8F135',border:'none',borderRadius:12,fontSize:17,fontWeight:800,cursor:loading?'not-allowed':'pointer',fontFamily:"'DM Serif Display',serif",marginTop:16,transition:'all 0.2s'}}
-              >
-                {loading ? 'Generando...' : lang==='es' ? 'Generar presentación →' : 'Generate presentation →'}
-              </button>
-            </div>
-
-            {loading && <Spinner />}
-            {result && !loading && <ResultView data={result} lang={lang} />}
+            ))}
           </div>
         </div>
-      );
-    }
+      )}
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  </script>
+      {/* Recruiters */}
+      {recruiters.length>0&&(
+        <div style={{marginBottom:32}}>
+          <div className="section-title" style={{marginBottom:12}}>Recruiters trabajando este cliente</div>
+          <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+            {recruiters.map(r=>(
+              <div key={r.id} style={{background:'rgba(163,230,53,0.08)',border:'1px solid rgba(163,230,53,0.2)',padding:'6px 14px',fontSize:12,color:'var(--lime)'}}>{r.name}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <PositionBlock title="Posiciones activas" list={active} color="var(--lime)"/>
+      <PositionBlock title="On hold" list={onHold} color="#f59e0b"/>
+      <PositionBlock title="Cerradas / Canceladas" list={closed} color="#555"/>
+    </div>
+  );
+}
+
+// ── RECRUITER VIEW ────────────────────────────────────────────────────────────
+function RecruiterView({ user, users }) {
+  const [positions,setPositions]=useState([]); const [clients,setClients]=useState([]); const [allPositions,setAllPositions]=useState([]); const [detail,setDetail]=useState(null); const [candModal,setCandModal]=useState(false);
+  const load = useCallback(async()=>{
+    const {data:pr}=await supabase.from('position_recruiters').select('position_id').eq('recruiter_id',user.id);
+    const ids=(pr||[]).map(p=>p.position_id);
+    if (ids.length) { const {data:pos}=await supabase.from('positions').select('*, clients(name,stakeholder)').in('id',ids).order('opened_at',{ascending:false}); setPositions(pos||[]); }
+    const [{data:cl},{data:ap}]=await Promise.all([supabase.from('clients').select('*'),supabase.from('positions').select('*, clients(name)')]);
+    setClients(cl||[]); setAllPositions(ap||[]);
+  },[user.id]);
+  useEffect(()=>{load();},[load]);
+  if (detail) return <PositionDetail positionId={detail} user={user} users={users} onBack={()=>setDetail(null)} clients={clients} onRefresh={load}/>;
+  return (
+    <div>
+      <div className="page-header">
+        <div><div className="page-title">Mis posiciones</div><div className="page-sub">{positions.length} asignadas</div></div>
+        <button className="btn-primary" onClick={()=>setCandModal(true)}>+ Agregar candidato</button>
+      </div>
+      <table className="data-table">
+        <thead><tr><th>Cliente</th><th>Rol</th><th>Location</th><th>Estado</th></tr></thead>
+        <tbody>{positions.map(p=>(
+          <tr key={p.id} onClick={()=>setDetail(p.id)} style={{cursor:'pointer'}}>
+            <td><span className="client-name">{p.clients?.name}</span></td>
+            <td>{p.role}</td>
+            <td style={{color:'var(--sub)',fontSize:11}}>{p.location}</td>
+            <td><StatusBadge status={p.status}/></td>
+          </tr>
+        ))}</tbody>
+      </table>
+      {!positions.length&&<div className="empty-state">No tenés posiciones asignadas</div>}
+      {candModal&&<CandidateModal onClose={()=>setCandModal(false)} onSave={()=>{setCandModal(false);load();}} positions={allPositions} currentUser={user}/>}
+    </div>
+  );
+}
+
+// ── APP ROOT ──────────────────────────────────────────────────────────────────
+function App() {
+  const [user,setUser]=useState(null); const [page,setPage]=useState('dashboard'); const [users,setUsers]=useState([]);
+  const loadUsers = async()=>{ const {data}=await supabase.from('users').select('*'); setUsers(data||[]); };
+  useEffect(()=>{ if(user) loadUsers(); },[user]);
+  if (!user) return <Login onLogin={u=>{setUser(u);setPage('dashboard');}}/>;
+  const ownerNav=[{id:'dashboard',label:'Dashboard'},{id:'positions',label:'Posiciones'},{id:'clients',label:'Clientes'},{id:'candidates',label:'Candidatos'},{id:'users',label:'Equipo'}];
+  const recruiterNav=[{id:'positions',label:'Mis posiciones'},{id:'candidates',label:'Candidatos'}];
+  const nav=user.role==='owner'?ownerNav:user.role==='recruiter'?recruiterNav:[];
+  const renderPage=()=>{
+    if (user.role==='client') return <ClientView user={user}/>;
+    if (user.role==='recruiter') {
+      if (page==='candidates') return <CandidatesPage user={user} users={users}/>;
+      return <RecruiterView user={user} users={users}/>;
+    }
+    switch(page) {
+      case 'dashboard': return <OwnerDashboard user={user} users={users}/>;
+      case 'positions': return <PositionsPage user={user} users={users}/>;
+      case 'clients': return <ClientsPage user={user} users={users}/>;
+      case 'candidates': return <CandidatesPage user={user} users={users}/>;
+      case 'users': return <UsersPage onRefresh={loadUsers}/>;
+      default: return <OwnerDashboard user={user} users={users}/>;
+    }
+  };
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar-logo" onClick={()=>setPage('dashboard')}>
+          <div className="sidebar-logo-hwg">HWG</div>
+          <div className="sidebar-logo-sub">Talent Consultants</div>
+        </div>
+        <div className="sidebar-user">
+          <div className="sidebar-user-name">{user.name}</div>
+          <div className="sidebar-user-role">{user.role}</div>
+        </div>
+        {nav.map(item=>(
+          <div key={item.id} className={`nav-item ${page===item.id?'active':''}`} onClick={()=>setPage(item.id)}>{item.label}</div>
+        ))}
+        <div className="sidebar-bottom">
+          <button className="logout-btn" onClick={()=>setUser(null)}>— Cerrar sesión</button>
+        </div>
+      </aside>
+      <main className="main-content">{renderPage()}</main>
+    </div>
+  );
+}
+
+ReactDOM.render(<App/>, document.getElementById('root'));
+</script>
 </body>
 </html>
