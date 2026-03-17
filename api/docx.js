@@ -112,20 +112,21 @@ module.exports = async function handler(req, res) {
     });
 
     // ── Two-column layout helper via Table ────────────────────────────────────
+    const dividerBorder = { style: BorderStyle.SINGLE, size: 6, color: VIOLET };
     const twoColTable = (leftChildren, rightChildren) => new Table({
       width: { size: 9360, type: WidthType.DXA },
       columnWidths: [4560, 4800],
       rows: [new TableRow({ children: [
         new TableCell({
           width: { size: 4560, type: WidthType.DXA },
-          borders: allNoBorder,
-          margins: { top: 0, bottom: 0, left: 0, right: 160 },
+          borders: { ...allNoBorder, right: dividerBorder },
+          margins: { top: 0, bottom: 0, left: 0, right: 200 },
           children: leftChildren,
         }),
         new TableCell({
           width: { size: 4800, type: WidthType.DXA },
-          borders: allNoBorder,
-          margins: { top: 0, bottom: 0, left: 160, right: 0 },
+          borders: { ...allNoBorder, left: dividerBorder },
+          margins: { top: 0, bottom: 0, left: 200, right: 0 },
           children: rightChildren,
         }),
       ]})]
