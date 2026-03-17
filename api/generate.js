@@ -97,7 +97,7 @@ ${notes ? `NOTAS DE PRESENTACIÓN (salario, disponibilidad, contexto adicional):
 INSTRUCCIONES:
 - techFit: número HONESTO del 1 al 10.
 - tools: SOLO herramientas que el candidato realmente usa según su CV. No inventes.
-- experience: array con la trayectoria laboral real del candidato extraída del CV. Máximo 4 entradas, ordenadas de más reciente a más antigua. Cada entrada: role, company, period (ej: "2019 — 2023 · 4 años").
+- experience: array con TODA la trayectoria laboral real del candidato extraída del CV. Máximo 6 entradas, ordenadas de más reciente a más antigua. Cada entrada: role, company, period (ej: "2019 — 2023 · 4 años"). No omitas trabajos relevantes.
 - englishLevel: nivel de inglés real según CV. Si no se menciona: "No especificado". Valores posibles: "Nativo", "Avanzado (C1/C2)", "Intermedio (B1/B2)", "Básico (A1/A2)", "No especificado", "No requerido para el rol".
 - storytelling: análisis honesto de 4 a 6 líneas. Si hay cambio de área o falta técnica, mencionalo. No exageres el fit.
 - gap: array de exactamente 2 a 3 objetos. Cada uno: {"title":"string corto","detail":"string explicativo"}. Gaps reales y concretos entre el perfil y la posición.
