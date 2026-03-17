@@ -16,29 +16,27 @@ module.exports = async function handler(req, res) {
     const today = new Date().toLocaleDateString(isEs ? 'es-AR' : 'en-US', {day:'2-digit', month:'long', year:'numeric'});
 
     // ── Colors ────────────────────────────────────────────────────────────────
-    const VIOLET     = '7C3AED';
-    const LIME       = '65A30D';    const LIME_LIGHT = 'F0FDF4';
-    const AMBER      = 'D97706';
-    const AMBER_LIGHT = 'FFFBEB';
-    const BLACK      = '111827';
-    const GRAY       = '6B7280';
-    const LIGHT_GRAY = 'F9FAFB';
-    const BORDER     = 'E5E7EB';
-    const WHITE      = 'FFFFFF';
+    const VIOLET       = '7C3AED';
+    const VIOLET_LIGHT = 'EDE9FE';
+    const LIME         = '65A30D';
+    const LIME_LIGHT   = 'F0FDF4';
+    const AMBER        = 'D97706';
+    const AMBER_LIGHT  = 'FFFBEB';
+    const BLACK        = '111827';
+    const GRAY         = '6B7280';
+    const BORDER       = 'E5E7EB';
+    const WHITE        = 'FFFFFF';
 
     // ── Labels ────────────────────────────────────────────────────────────────
     const L = isEs ? {
-      contact:      'CONTACTO',
+      contact:      'INFORMACIÓN DE CONTACTO',
       evaluation:   'EVALUACIÓN',
       techFit:      'Fit técnico',
       experience:   'Experiencia',
       cultureFit:   'Culture fit',
       english:      'Nivel de inglés',
-      trajectory:   'TRAYECTORIA',
-      tools:        'HERRAMIENTAS Y SISTEMAS',
-      toolCol:      'Herramienta',
-      yearsCol:     'Años',
-      levelCol:     'Nivel',
+      trajectory:   'TRAYECTORIA PROFESIONAL',
+      tools:        'STACK TÉCNICO Y HERRAMIENTAS',
       whyFit:       'POR QUÉ ES FIT PARA ESTE ROL',
       gap:          'GAP ANALYSIS',
       linkedin:     'LinkedIn',
@@ -46,22 +44,17 @@ module.exports = async function handler(req, res) {
       email:        'Email',
       salary:       'Salario pretendido',
       availability: 'Disponibilidad',
-      position:     'Posición',
-      date:         'Fecha de presentación',
       presentedBy:  'Presentado por',
       presentedFor: 'Presentado para',
     } : {
-      contact:      'CONTACT',
+      contact:      'CONTACT INFORMATION',
       evaluation:   'EVALUATION',
       techFit:      'Technical fit',
       experience:   'Experience',
       cultureFit:   'Culture fit',
       english:      'English level',
-      trajectory:   'CAREER HISTORY',
-      tools:        'TOOLS & STACK',
-      toolCol:      'Tool',
-      yearsCol:     'Years',
-      levelCol:     'Level',
+      trajectory:   'PROFESSIONAL BACKGROUND',
+      tools:        'TECH STACK & TOOLS',
       whyFit:       'WHY THIS CANDIDATE FITS',
       gap:          'GAP ANALYSIS',
       linkedin:     'LinkedIn',
@@ -69,17 +62,13 @@ module.exports = async function handler(req, res) {
       email:        'Email',
       salary:       'Salary expectation',
       availability: 'Availability',
-      position:     'Position',
-      date:         'Presentation date',
       presentedBy:  'Presented by',
       presentedFor: 'Presented for',
     };
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    const noBorder = { style: BorderStyle.NONE, size: 0, color: WHITE };
-    const thinBorder = { style: BorderStyle.SINGLE, size: 2, color: BORDER };
-    const violetBorder = { style: BorderStyle.SINGLE, size: 16, color: VIOLET };
-
+    const noBorder    = { style: BorderStyle.NONE, size: 0, color: WHITE };
+    const thinBorder  = { style: BorderStyle.SINGLE, size: 2, color: BORDER };
     const allNoBorder = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
 
     const sp = (before=0, after=0) => ({ before, after });
@@ -103,69 +92,21 @@ module.exports = async function handler(req, res) {
       children: Array.isArray(children) ? children : [children],
     });
 
-    // Section heading with violet left bar
     const sectionHead = (label) => new Paragraph({
-      spacing: sp(360, 120),
+      spacing: sp(400, 140),
       border: { left: { style: BorderStyle.SINGLE, size: 20, color: VIOLET } },
       indent: { left: 120 },
       children: [txt(label, { size: 18, bold: true, color: VIOLET, characterSpacing: 80 })]
     });
 
-    // ── Two-column layout helper via Table ────────────────────────────────────
-    const dividerBorder = { style: BorderStyle.SINGLE, size: 6, color: VIOLET };
-    const twoColTable = (leftChildren, rightChildren) => new Table({
-      width: { size: 9360, type: WidthType.DXA },
-      columnWidths: [4560, 4800],
-      rows: [new TableRow({ children: [
-        new TableCell({
-          width: { size: 4560, type: WidthType.DXA },
-          borders: { ...allNoBorder, right: dividerBorder },
-          margins: { top: 0, bottom: 0, left: 0, right: 200 },
-          children: leftChildren,
-        }),
-        new TableCell({
-          width: { size: 4800, type: WidthType.DXA },
-          borders: { ...allNoBorder, left: dividerBorder },
-          margins: { top: 0, bottom: 0, left: 200, right: 0 },
-          children: rightChildren,
-        }),
-      ]})]
+    const infoLine = (label, value, valueColor) => new Paragraph({
+      spacing: sp(0, 0),
+      border: { bottom: thinBorder },
+      children: [
+        txt(`${label}   `, { size: 20, color: GRAY }),
+        txt(String(value || '[COMPLETAR]'), { size: 20, bold: true, color: valueColor || BLACK }),
+      ]
     });
-
-    // Info row (label: value) for contact card
-    const infoRow = (label, value, valueColor) => new TableRow({ children: [
-      new TableCell({
-        width: { size: 1800, type: WidthType.DXA },
-        borders: { ...allNoBorder, bottom: thinBorder },
-        margins: { top: 100, bottom: 100, left: 120, right: 80 },
-        children: [para(txt(label, { size: 20, color: GRAY }))]
-      }),
-      new TableCell({
-        width: { size: 2600, type: WidthType.DXA },
-        borders: { ...allNoBorder, bottom: thinBorder },
-        margins: { top: 100, bottom: 100, left: 80, right: 120 },
-        children: [para(txt(value || '[COMPLETAR]', { size: 20, bold: true, color: valueColor || BLACK }))]
-      }),
-    ]});
-
-    // Snapshot row (label + value) for evaluation card
-    const snapRow = (label, value, valueColor) => new TableRow({ children: [
-      new TableCell({
-        width: { size: 2400, type: WidthType.DXA },
-        borders: { ...allNoBorder, bottom: thinBorder },
-        margins: { top: 110, bottom: 110, left: 120, right: 80 },
-        children: [para(txt(label, { size: 20, color: GRAY }))]
-      }),
-      new TableCell({
-        width: { size: 2000, type: WidthType.DXA },
-        borders: { ...allNoBorder, bottom: thinBorder },
-        margins: { top: 110, bottom: 110, left: 80, right: 120 },
-        children: [para(txt(value || '[COMPLETAR]', { size: 20, bold: true, color: valueColor || BLACK }))]
-      }),
-    ]});
-
-    // Card wrapper (shaded box with label)
-    const cardLabel = (text) => para(txt(text, { size: 16, bold: true, color: GRAY, characterSpacing: 80 }), { spacing: sp(0, 80) });
 
     // ── HEADER ────────────────────────────────────────────────────────────────
     const rec = data.recommendation || '';
@@ -174,9 +115,7 @@ module.exports = async function handler(req, res) {
                    : VIOLET;
 
     const headerSection = [
-      // Name
       para(txt(data.name || '[COMPLETAR]', { size: 52, bold: true, color: BLACK }), { spacing: sp(0, 60) }),
-      // Role · Location · Modality
       para([
         txt(data.role || '', { size: 22, color: GRAY }),
         txt('  ·  ', { size: 22, color: BORDER }),
@@ -184,139 +123,118 @@ module.exports = async function handler(req, res) {
         txt('  ·  ', { size: 22, color: BORDER }),
         txt(data.modality || '', { size: 22, color: GRAY }),
       ], { spacing: sp(0, 80) }),
-      // Recommendation badge
-      ...(rec ? [para(txt(`▶  ${rec}`, { size: 20, bold: true, color: recColor }), { spacing: sp(80, 0) })] : []),
-      // Violet divider
+      ...(rec ? [para(txt(`▶  ${rec}`, { size: 20, bold: true, color: recColor }), { spacing: sp(60, 0) })] : []),
       new Paragraph({
-        spacing: sp(200, 200),
+        spacing: sp(180, 200),
         border: { bottom: { style: BorderStyle.SINGLE, size: 16, color: VIOLET } },
         children: []
       }),
-      // Presented for line
       para([
         txt(`${L.presentedFor}:  `, { size: 20, color: GRAY }),
         txt(data.personal?.position || '', { size: 20, bold: true, color: BLACK }),
         txt('   ·   ', { size: 20, color: BORDER }),
         txt(today, { size: 20, color: GRAY }),
-      ], { spacing: sp(0, 280) }),
+      ], { spacing: sp(0, 320) }),
     ];
 
-    // ── CONTACT CARD ──────────────────────────────────────────────────────────
-    const contactRows = [
-      infoRow(L.linkedin,     data.personal?.linkedin     || '[COMPLETAR]', VIOLET),
-      infoRow(L.phone,        data.personal?.phone        || '[COMPLETAR]'),
-      infoRow(L.email,        data.personal?.email        || '[COMPLETAR]'),
-      infoRow(L.salary,       data.personal?.salary       || data.snapshot?.salary || '[COMPLETAR]'),
-      infoRow(L.availability, data.personal?.availability || data.snapshot?.avail  || '[COMPLETAR]', LIME),
+    // ── CONTACT ───────────────────────────────────────────────────────────────
+    const contactSection = [
+      sectionHead(L.contact),
+      infoLine(L.linkedin,     data.personal?.linkedin     || '[COMPLETAR]', VIOLET),
+      infoLine(L.phone,        data.personal?.phone        || '[COMPLETAR]'),
+      infoLine(L.email,        data.personal?.email        || '[COMPLETAR]'),
+      infoLine(L.salary,       data.personal?.salary       || data.snapshot?.salary || '[COMPLETAR]'),
+      infoLine(L.availability, data.personal?.availability || data.snapshot?.avail  || '[COMPLETAR]', LIME),
+      para([], { spacing: sp(0, 80) }),
     ];
 
-    const contactCard = [
-      cardLabel(L.contact),
-      new Table({
-        width: { size: 4400, type: WidthType.DXA },
-        columnWidths: [1800, 2600],
-        rows: contactRows,
-      }),
-    ];
-
-    // ── EVALUATION CARD ───────────────────────────────────────────────────────
-    const snapRows = [
-      snapRow(L.techFit,    `${data.snapshot?.techFit || '?'} / 10`, VIOLET),
-      snapRow(L.experience, data.snapshot?.exp || '[COMPLETAR]'),
-      snapRow(L.cultureFit, data.snapshot?.cult || '[COMPLETAR]'),
-      snapRow(L.english,    data.snapshot?.englishLevel || '[COMPLETAR]'),
-    ];
-
-    const evalCard = [
-      cardLabel(L.evaluation),
-      new Table({
-        width: { size: 4640, type: WidthType.DXA },
-        columnWidths: [2400, 2240],
-        rows: snapRows,
-      }),
+    // ── EVALUATION ────────────────────────────────────────────────────────────
+    const evalSection = [
+      sectionHead(L.evaluation),
+      infoLine(L.techFit,    `${data.snapshot?.techFit || '?'} / 10`, VIOLET),
+      infoLine(L.experience, data.snapshot?.exp  || '[COMPLETAR]'),
+      infoLine(L.cultureFit, data.snapshot?.cult || '[COMPLETAR]'),
+      infoLine(L.english,    data.snapshot?.englishLevel || '[COMPLETAR]'),
+      para([], { spacing: sp(0, 80) }),
     ];
 
     // ── TRAJECTORY ────────────────────────────────────────────────────────────
     const expItems = Array.isArray(data.experience) ? data.experience : [];
-    const trajectoryRows = expItems.flatMap((e, i) => [
-      new Paragraph({
-        spacing: sp(i === 0 ? 0 : 160, 40),
-        children: [
-          txt('● ', { size: 20, color: VIOLET }),
-          txt(e.role || '', { size: 22, bold: true, color: BLACK }),
-        ]
-      }),
-      para(txt(e.company || '', { size: 20, color: GRAY }), { spacing: sp(0, 0) }),
-      para(txt(e.period || '', { size: 18, color: GRAY, italic: true }), { spacing: sp(0, 40) }),
-    ]);
+    const trajectorySection = [
+      sectionHead(L.trajectory),
+      ...expItems.flatMap((e, i) => [
+        new Paragraph({
+          spacing: sp(i === 0 ? 0 : 180, 40),
+          children: [
+            txt('● ', { size: 20, color: VIOLET }),
+            txt(e.role || '', { size: 22, bold: true, color: BLACK }),
+          ]
+        }),
+        para([
+          txt(e.company || '', { size: 20, bold: true, color: GRAY }),
+          txt(e.period ? `   ·   ${e.period}` : '', { size: 19, color: GRAY, italic: true }),
+        ], { spacing: sp(0, 0), indent: { left: 240 } }),
+      ]),
+      para([], { spacing: sp(0, 80) }),
+    ];
 
-    // ── TOOLS TABLE ───────────────────────────────────────────────────────────
-    const toolsHeader = new TableRow({ children: [
-      new TableCell({
-        width: { size: 5400, type: WidthType.DXA },
-        borders: { ...allNoBorder, bottom: violetBorder },
-        margins: { top: 80, bottom: 80, left: 120, right: 80 },
-        children: [para(txt(L.toolCol, { size: 18, bold: true, color: GRAY, characterSpacing: 60 }))]
+    // ── TOOLS — pills layout 3 per row ────────────────────────────────────────
+    const tools = data.tools || [];
+    const toolsSection = tools.length === 0 ? [] : [
+      sectionHead(L.tools),
+      ...chunkArray(tools, 3).map(rowTools => {
+        const cellWidth = Math.floor(9360 / 3);
+        const cells = rowTools.map(tool => new TableCell({
+          width: { size: cellWidth, type: WidthType.DXA },
+          borders: allNoBorder,
+          margins: { top: 80, bottom: 80, left: 80, right: 80 },
+          shading: { fill: VIOLET_LIGHT, type: ShadingType.CLEAR },
+          children: [new Paragraph({
+            spacing: sp(0, 0),
+            children: [
+              txt(tool.tool || '', { size: 20, bold: true, color: VIOLET }),
+              ...(tool.years ? [txt(`  ${tool.years}y`, { size: 18, color: GRAY })] : []),
+              ...(tool.level ? [txt(`  ·  ${tool.level}`, { size: 18, color: GRAY })] : []),
+            ]
+          })]
+        }));
+        // Pad to 3 cells
+        while (cells.length < 3) {
+          cells.push(new TableCell({
+            width: { size: cellWidth, type: WidthType.DXA },
+            borders: allNoBorder,
+            margins: { top: 80, bottom: 80, left: 80, right: 80 },
+            children: [para(txt(''), {})]
+          }));
+        }
+        return new Table({
+          width: { size: 9360, type: WidthType.DXA },
+          columnWidths: [cellWidth, cellWidth, cellWidth],
+          rows: [new TableRow({ children: cells })]
+        });
       }),
-      new TableCell({
-        width: { size: 1560, type: WidthType.DXA },
-        borders: { ...allNoBorder, bottom: violetBorder },
-        margins: { top: 80, bottom: 80, left: 80, right: 80 },
-        children: [para(txt(L.yearsCol, { size: 18, bold: true, color: GRAY, characterSpacing: 60 }), { align: AlignmentType.CENTER })]
-      }),
-      new TableCell({
-        width: { size: 2400, type: WidthType.DXA },
-        borders: { ...allNoBorder, bottom: violetBorder },
-        margins: { top: 80, bottom: 80, left: 80, right: 120 },
-        children: [para(txt(L.levelCol, { size: 18, bold: true, color: GRAY, characterSpacing: 60 }))]
-      }),
-    ]});
-
-    const toolRows = (data.tools || []).map((tool, i) => new TableRow({ children: [
-      new TableCell({
-        width: { size: 5400, type: WidthType.DXA },
-        shading: { fill: i % 2 === 0 ? LIGHT_GRAY : WHITE, type: ShadingType.CLEAR },
-        borders: { ...allNoBorder, bottom: thinBorder },
-        margins: { top: 160, bottom: 160, left: 120, right: 80 },
-        children: [para(txt(tool.tool || '', { size: 22, bold: true }))]
-      }),
-      new TableCell({
-        width: { size: 1560, type: WidthType.DXA },
-        shading: { fill: i % 2 === 0 ? LIGHT_GRAY : WHITE, type: ShadingType.CLEAR },
-        borders: { ...allNoBorder, bottom: thinBorder },
-        margins: { top: 160, bottom: 160, left: 80, right: 80 },
-        children: [para(txt(tool.years || '', { size: 22, bold: true, color: VIOLET }), { align: AlignmentType.CENTER })]
-      }),
-      new TableCell({
-        width: { size: 2400, type: WidthType.DXA },
-        shading: { fill: i % 2 === 0 ? LIGHT_GRAY : WHITE, type: ShadingType.CLEAR },
-        borders: { ...allNoBorder, bottom: thinBorder },
-        margins: { top: 160, bottom: 160, left: 80, right: 120 },
-        children: [para(txt(tool.level || '', { size: 20, color: GRAY }))]
-      }),
-    ]}));
+      para([], { spacing: sp(0, 80) }),
+    ];
 
     // ── WHY FIT ───────────────────────────────────────────────────────────────
-    const whyParagraphs = [
+    const whySection = [
       sectionHead(L.whyFit),
       new Paragraph({
         spacing: sp(60, 240),
         border: { left: { style: BorderStyle.SINGLE, size: 20, color: LIME } },
         shading: { fill: LIME_LIGHT, type: ShadingType.CLEAR },
-        indent: { left: 140, right: 0 },
+        indent: { left: 140 },
         children: [txt(data.storytelling || data.why || '', { size: 22, italic: true, color: '374151' })]
       }),
     ];
 
     // ── GAP ANALYSIS ─────────────────────────────────────────────────────────
-    const gapItems = Array.isArray(data.gap) ? data.gap : [];
-    // backwards compat: if gap is a string, wrap it
-    const gapList = gapItems.length > 0 ? gapItems
+    const gapItems = Array.isArray(data.gap) ? data.gap
       : (typeof data.gap === 'string' && data.gap ? [{ title: 'Gap', detail: data.gap }] : []);
 
-    const gapParagraphs = gapList.length > 0 ? [
+    const gapSection = gapItems.length > 0 ? [
       sectionHead(L.gap),
-      ...gapList.map((g, i) => new Paragraph({
+      ...gapItems.map((g, i) => new Paragraph({
         spacing: sp(i === 0 ? 60 : 120, 60),
         border: { left: { style: BorderStyle.SINGLE, size: 20, color: AMBER } },
         shading: { fill: AMBER_LIGHT, type: ShadingType.CLEAR },
@@ -344,7 +262,7 @@ module.exports = async function handler(req, res) {
       ]
     });
 
-    // ── ASSEMBLE DOC ──────────────────────────────────────────────────────────
+    // ── ASSEMBLE ──────────────────────────────────────────────────────────────
     const doc = new Document({
       sections: [{
         properties: {
@@ -355,32 +273,12 @@ module.exports = async function handler(req, res) {
         },
         children: [
           ...headerSection,
-
-          // Two-column: contact + evaluation
-          twoColTable(contactCard, evalCard),
-
-          para([], { spacing: sp(0, 240) }),
-
-          // Trajectory
-          sectionHead(L.trajectory),
-          ...trajectoryRows,
-          para([], { spacing: sp(0, 200) }),
-
-          // Tools
-          sectionHead(L.tools),
-          new Table({
-            width: { size: 9360, type: WidthType.DXA },
-            columnWidths: [5400, 1560, 2400],
-            rows: [toolsHeader, ...toolRows],
-          }),
-
-          // Why fit
-          ...whyParagraphs,
-
-          // Gap analysis
-          ...gapParagraphs,
-
-          // Footer
+          ...contactSection,
+          ...evalSection,
+          ...trajectorySection,
+          ...toolsSection,
+          ...whySection,
+          ...gapSection,
           footer,
         ]
       }]
@@ -388,7 +286,7 @@ module.exports = async function handler(req, res) {
 
     const buffer = await Packer.toBuffer(doc);
 
-    // ── Send email copy ───────────────────────────────────────────────────────
+    // ── Email ─────────────────────────────────────────────────────────────────
     try {
       const nodemailer = require('nodemailer');
       const transporter = nodemailer.createTransport({
@@ -415,7 +313,7 @@ module.exports = async function handler(req, res) {
                 ${data.recommendation ? `<tr><td style="padding:8px 0;font-weight:700;">Recomendación</td><td>${data.recommendation}</td></tr>` : ''}
                 <tr><td style="padding:8px 0;font-weight:700;">Fecha</td><td>${today}</td></tr>
               </table>
-              <p style="margin-top:20px;font-size:13px;color:#888;">El documento Word está adjunto a este mail.</p>
+              <p style="margin-top:20px;font-size:13px;color:#888;">El documento Word está adjunto.</p>
             </div>
           </div>`,
         attachments: [{
@@ -437,3 +335,9 @@ module.exports = async function handler(req, res) {
     res.status(500).json({ error: e.message });
   }
 };
+
+function chunkArray(arr, size) {
+  const result = [];
+  for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
+  return result;
+}
