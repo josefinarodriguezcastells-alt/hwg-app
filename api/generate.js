@@ -25,8 +25,9 @@ module.exports = async function handler(req, res) {
     const lang            = get(fields.lang) || 'es';
     const position        = get(fields.position);
     const jd              = get(fields.jd);
-    const jdNotes         = get(fields.jd_notes); // contexto adicional de la posición
+    const jdNotes         = get(fields.jd_notes);
     const candidateNotes  = get(fields.candidate_notes);
+    const cvUrl           = get(fields.cv_url); // ← nueva: URL directa del CV
     const isEs            = lang === 'es';
 
     // ── Helper: extract text from a file ─────────────────────────────────────
@@ -47,9 +48,34 @@ module.exports = async function handler(req, res) {
       } catch(e) { return `[No se pudo leer: ${file.originalFilename}]`; }
     };
 
-    // ── Read CV ───────────────────────────────────────────────────────────────
-    const cvFile = files.cv?.[0] || files.cv;
-    const cvText = await extractText(cvFile);
+    // ── Helper: extract text from URL (server-side fetch) ─────────────────────
+    const extractTextFromUrl = async (url) => {
+      if (!url) return '';
+      try {
+        const response = await fetch(url);
+        if (!response.ok) return '';
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const ext = url.split('?')[0].split('.').pop().toLowerCase();
+        if (ext === 'pdf') {
+          const pdfParse = require('pdf-parse');
+          return (await pdfParse(buffer)).text || '';
+        } else if (ext === 'docx' || ext === 'doc') {
+          const mammoth = require('mammoth');
+          return (await mammoth.extractRawText({ buffer })).value || '';
+        } else {
+          return buffer.toString('utf8');
+        }
+      } catch(e) { return ''; }
+    };
+
+    // ── Read CV — primero URL, sino archivo subido ────────────────────────────
+    let cvText = '';
+    if (cvUrl) {
+      cvText = await extractTextFromUrl(cvUrl);
+    } else {
+      const cvFile = files.cv?.[0] || files.cv;
+      cvText = await extractText(cvFile);
+    }
 
     if (!cvText || cvText.trim().length < 30) {
       return res.status(400).json({ error: 'No se pudo leer el CV. Probá con otro formato.' });
