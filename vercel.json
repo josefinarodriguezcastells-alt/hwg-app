@@ -2,6 +2,12 @@
   "functions": {
     "api/generate.js": {
       "maxDuration": 60
+    },
+    "api/extract-profile.js": {
+      "maxDuration": 60
+    },
+    "api/docx.js": {
+      "maxDuration": 60
     }
   },
   "headers": [
