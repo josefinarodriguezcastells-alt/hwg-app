@@ -21,14 +21,18 @@ module.exports = async function handler(req, res) {
 
     const get = (f) => Array.isArray(f) ? (f[0] || '') : String(f || '');
 
-    const notes           = get(fields.notes);
-    const lang            = get(fields.lang) || 'es';
-    const position        = get(fields.position);
-    const jd              = get(fields.jd);
-    const jdNotes         = get(fields.jd_notes);
-    const candidateNotes  = get(fields.candidate_notes);
-    const cvUrl           = get(fields.cv_url); // ← nueva: URL directa del CV
-    const isEs            = lang === 'es';
+    const notes             = get(fields.notes);
+    const interviewerNotes  = get(fields.interviewer_notes); // notas del modal, campo separado
+    const salary            = get(fields.salary);
+    const availability      = get(fields.availability);
+    const lang              = get(fields.lang) || 'es';
+    const position          = get(fields.position);
+    const jd                = get(fields.jd);
+    const jdNotes           = get(fields.jd_notes);
+    const candidateNotes    = get(fields.candidate_notes);
+    const scorecardText     = get(fields.scorecard);
+    const cvUrl             = get(fields.cv_url);
+    const isEs              = lang === 'es';
 
     // ── Helper: extract text from a file ─────────────────────────────────────
     const extractText = async (file) => {
@@ -109,14 +113,23 @@ module.exports = async function handler(req, res) {
       i++;
     }
 
-    // Combine all interview notes — text from modal + files
+    // Combine all interview notes — texto del modal + archivos + scorecard
     const allInterviewNotes = [
-      candidateNotes || '',
-      notes || '',
+      interviewerNotes || '',   // campo separado del modal (prioridad alta)
+      candidateNotes   || '',
+      notes            || '',
       ...interviewSections,
+      scorecardText    || '',
     ].filter(Boolean).join('\n\n---\n\n');
 
-    const hasInterviewNotes = allInterviewNotes.trim().length > 20;
+    // Threshold bajo — cualquier nota real cuenta
+    const hasInterviewNotes = allInterviewNotes.trim().length > 5;
+
+    // Campos logísticos separados para que Claude los use directamente
+    const logisticBlock = [
+      salary       ? `SALARIO PRETENDIDO: ${salary}`       : '',
+      availability ? `DISPONIBILIDAD: ${availability}`     : '',
+    ].filter(Boolean).join('\n');
     const otherDocsBlock = otherSections.length ? `\nDOCUMENTOS ADICIONALES:\n${otherSections.join('\n---\n')}\n` : '';
 
     // ── Build prompt ──────────────────────────────────────────────────────────
@@ -126,7 +139,7 @@ CONTEXTO: El cliente va a leer MUCHOS reportes. Si todos suenan igual, perdemos 
 
 FUENTES DE INFORMACIÓN (en orden de importancia):
 ${hasInterviewNotes ? `
-1. NOTAS DE ENTREVISTA — esta es tu fuente principal. Usá lo que el candidato dijo, cómo lo dijo, qué lo motiva, qué busca. El storytelling tiene que reflejar la entrevista, no el CV.
+1. NOTAS DE ENTREVISTA — FUENTE PRINCIPAL. Todo el análisis parte de acá. Usá lo que el candidato dijo en sus propias palabras. El storytelling tiene que reflejar la entrevista, no el CV. Si hay scorecard, incorporá esas evaluaciones al análisis.
 ---
 ${allInterviewNotes.slice(0, 6000)}
 ---` : `
@@ -150,12 +163,17 @@ ${jdNotes.slice(0, 2000)}
 
 ${position ? `POSICIÓN: ${position}` : ''}
 
+${logisticBlock ? `DATOS LOGÍSTICOS DEL CANDIDATO (ya confirmados con él):
+${logisticBlock}` : ''}
+
 INSTRUCCIONES CRÍTICAS:
 - techFit: número HONESTO del 1 al 10 comparando el CV contra la JD. Si no hay JD, evaluá contra el rol. Un candidato sin experiencia técnica relevante puede ser 3 o 4.
 - cult: culture fit basado en lo que dijiste en la entrevista sobre motivaciones, forma de trabajar, valores. Si no hay entrevista: "[Sin datos de entrevista]".
 - tools: SOLO herramientas que aparecen explícitamente en el CV. Cero invenciones. Para cada tool: "tool" es el nombre, "years" solo si el CV menciona explícitamente los años de experiencia con esa herramienta — si no está claro, dejá years como string vacío "". NUNCA pongas nivel (junior/intermedio/avanzado) — ese campo no existe.
 - experience: los 4 trabajos más recientes del CV, de más reciente a más antiguo.
 - englishLevel: nivel real según CV o lo mencionado en entrevista. Si no se sabe: "No especificado".
+- personal.salary: usá exactamente el valor de SALARIO PRETENDIDO si viene en los datos logísticos. Si no hay, extraelo del CV o notas.
+- personal.availability: usá exactamente el valor de DISPONIBILIDAD si viene en los datos logísticos. Si no hay, extraelo de las notas.
 - storytelling: 4 a 6 líneas ÚNICAS para este candidato. Si hay notas de entrevista, usá frases o conceptos que el candidato mencionó. PROHIBIDO usar frases genéricas como "sólida trayectoria", "perfil versátil", "orientado a resultados". Si el perfil no es bueno para el rol, decilo con claridad y sin vueltas.
 - gap: 2 a 3 gaps REALES y ESPECÍFICOS entre este candidato y esta posición. No inventes gaps pero tampoco los suavices.
 - recommendation: elegí con criterio real.
