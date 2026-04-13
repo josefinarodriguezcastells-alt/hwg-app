@@ -21,7 +21,6 @@ module.exports = async function handler(req, res) {
     const file = files.cv?.[0] || files.cv;
     if (!file) return res.status(400).json({ error: 'No file provided' });
 
-    // Extract text from CV
     const filePath = file.filepath;
     const ext = path.extname(file.originalFilename || '').toLowerCase();
     let cvText = '';
@@ -46,9 +45,6 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ name: null, email: null, phone: null, linkedin_url: null, location: null });
     }
 
-    console.log('extract-profile: extracted text sample:', cvText.slice(0, 300));
-
-    // Ask Claude to extract personal data
     const prompt = `Extraé los datos personales de este CV. Respondé ÚNICAMENTE con JSON válido, sin markdown ni explicaciones.
 
 CV:
@@ -75,7 +71,7 @@ Respondé SOLO con este JSON:
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 300,
         messages: [{ role: 'user', content: prompt }]
       })
@@ -87,11 +83,11 @@ Respondé SOLO con este JSON:
     try {
       const parsed = JSON.parse(raw);
       return res.status(200).json({
-        name:        parsed.name        || null,
-        email:       parsed.email       || null,
-        phone:       parsed.phone       || null,
+        name:         parsed.name         || null,
+        email:        parsed.email        || null,
+        phone:        parsed.phone        || null,
         linkedin_url: parsed.linkedin_url || null,
-        location:    parsed.location    || null,
+        location:     parsed.location     || null,
       });
     } catch(e) {
       return res.status(200).json({ name: null, email: null, phone: null, linkedin_url: null, location: null });
@@ -99,7 +95,6 @@ Respondé SOLO con este JSON:
 
   } catch(e) {
     console.error('extract-profile error:', e.message);
-    // Never fail hard — return nulls so the form stays usable
     return res.status(200).json({ name: null, email: null, phone: null, linkedin_url: null, location: null });
   }
 };
