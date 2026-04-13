@@ -2,6 +2,73 @@ const formidable = require('formidable');
 const fs = require('fs');
 const path = require('path');
 
+// ─── CONFIGURACIÓN DE PROVEEDOR ───────────────────────────────────────────────
+// Para cambiar de proveedor: modificá solo esta variable.
+// Opciones: 'gemini' (gratis hasta 1500 req/día) | 'claude' | 'openai'
+const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini';
+
+async function callAI(prompt) {
+  if (AI_PROVIDER === 'gemini') {
+    const apiKey = process.env.GEMINI_API_KEY;
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3 }
+        })
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Gemini error');
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return raw.replace(/```json|```/g, '').trim();
+  }
+
+  if (AI_PROVIDER === 'claude') {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2500,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Claude error');
+    return (data.content || []).map(c => c.text || '').join('').replace(/```json|```/g, '').trim();
+  }
+
+  if (AI_PROVIDER === 'openai') {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        max_tokens: 2500,
+        temperature: 0.3,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'OpenAI error');
+    return (data.choices?.[0]?.message?.content || '').replace(/```json|```/g, '').trim();
+  }
+
+  throw new Error(`Proveedor desconocido: ${AI_PROVIDER}`);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -174,22 +241,21 @@ INSTRUCCIONES CRÍTICAS:
 Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), con esta estructura exacta:
 {"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","englishLevel":"string"},"tools":[{"tool":"string","years":"string"}],"experience":[{"role":"string","company":"string","period":"string"}],"storytelling":"string","gap":[{"title":"string","detail":"string"}],"recommendation":"string"}`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2500,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
+    // ── Llamada al proveedor de IA ──
+    const raw = await callAI(prompt);
 
-    const data = await response.json();
-    res.status(200).json(data);
+    // ── Validar que el JSON sea parseable antes de devolver ──
+    try {
+      JSON.parse(raw);
+    } catch(e) {
+      return res.status(500).json({ error: 'La IA devolvió una respuesta inválida. Intentá de nuevo.' });
+    }
+
+    // Devolvemos el mismo formato que esperaba el frontend con Claude:
+    // { content: [{ type: 'text', text: '...' }] }
+    res.status(200).json({
+      content: [{ type: 'text', text: raw }]
+    });
 
   } catch (e) {
     res.status(500).json({ error: e.message });
