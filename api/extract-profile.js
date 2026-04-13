@@ -2,6 +2,72 @@ const formidable = require('formidable');
 const fs = require('fs');
 const path = require('path');
 
+// ─── CONFIGURACIÓN DE PROVEEDOR ───────────────────────────────────────────────
+// Para cambiar de proveedor: modificá solo esta variable.
+// Opciones: 'gemini' (gratis hasta 1500 req/día) | 'claude' | 'openai'
+const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini';
+
+async function callAI(prompt) {
+  if (AI_PROVIDER === 'gemini') {
+    const apiKey = process.env.GEMINI_API_KEY;
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 300 }
+        })
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Gemini error');
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
+
+  if (AI_PROVIDER === 'claude') {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Claude error');
+    return (data.content || []).map(c => c.text || '').join('');
+  }
+
+  if (AI_PROVIDER === 'openai') {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        max_tokens: 300,
+        temperature: 0.1,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'OpenAI error');
+    return data.choices?.[0]?.message?.content || '';
+  }
+
+  throw new Error(`Proveedor desconocido: ${AI_PROVIDER}`);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -63,25 +129,11 @@ Reglas estrictas:
 Respondé SOLO con este JSON:
 {"name":null,"email":null,"phone":null,"linkedin_url":null,"location":null}`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    const data = await response.json();
-    const raw = (data.content || []).map(c => c.text || '').join('').replace(/```json|```/g, '').trim();
+    const raw = await callAI(prompt);
+    const clean = raw.replace(/```json|```/g, '').trim();
 
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(clean);
       return res.status(200).json({
         name:         parsed.name         || null,
         email:        parsed.email        || null,
