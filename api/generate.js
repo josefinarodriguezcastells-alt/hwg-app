@@ -22,7 +22,7 @@ module.exports = async function handler(req, res) {
     const get = (f) => Array.isArray(f) ? (f[0] || '') : String(f || '');
 
     const notes             = get(fields.notes);
-    const interviewerNotes  = get(fields.interviewer_notes); // notas del modal, campo separado
+    const interviewerNotes  = get(fields.interviewer_notes);
     const salary            = get(fields.salary);
     const availability      = get(fields.availability);
     const lang              = get(fields.lang) || 'es';
@@ -34,7 +34,6 @@ module.exports = async function handler(req, res) {
     const cvUrl             = get(fields.cv_url);
     const isEs              = lang === 'es';
 
-    // ── Helper: extract text from a file ─────────────────────────────────────
     const extractText = async (file) => {
       if (!file) return '';
       const filePath = file.filepath;
@@ -52,7 +51,6 @@ module.exports = async function handler(req, res) {
       } catch(e) { return `[No se pudo leer: ${file.originalFilename}]`; }
     };
 
-    // ── Helper: extract text from URL (server-side fetch) ─────────────────────
     const extractTextFromUrl = async (url) => {
       if (!url) return '';
       try {
@@ -72,7 +70,6 @@ module.exports = async function handler(req, res) {
       } catch(e) { return ''; }
     };
 
-    // ── Read CV — primero URL, sino archivo subido ────────────────────────────
     let cvText = '';
     if (cvUrl) {
       cvText = await extractTextFromUrl(cvUrl);
@@ -85,25 +82,21 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'No se pudo leer el CV. Probá con otro formato.' });
     }
 
-    // ── Separate interview notes from other docs ──────────────────────────────
     const interviewSections = [];
     const otherSections = [];
 
-    // Legacy single interview file
     const interviewFile = files.interview?.[0] || files.interview;
     if (interviewFile) {
       const t = await extractText(interviewFile);
       if (t) interviewSections.push(t.slice(0, 3000));
     }
 
-    // Multiple extra docs sent as extra_0, extra_1, extra_2...
     let i = 0;
     while (files[`extra_${i}`]) {
       const f = files[`extra_${i}`]?.[0] || files[`extra_${i}`];
       const label = get(fields[`extra_${i}_label`]) || `Documento adicional ${i + 1}`;
       const t = await extractText(f);
       if (t) {
-        // interview_notes go to primary source, others go to context
         if (label.toLowerCase().includes('interview') || label.toLowerCase().includes('entrevista') || label.toLowerCase().includes('notas')) {
           interviewSections.push(t.slice(0, 3000));
         } else {
@@ -113,26 +106,22 @@ module.exports = async function handler(req, res) {
       i++;
     }
 
-    // Combine all interview notes — texto del modal + archivos + scorecard
     const allInterviewNotes = [
-      interviewerNotes || '',   // campo separado del modal (prioridad alta)
+      interviewerNotes || '',
       candidateNotes   || '',
       notes            || '',
       ...interviewSections,
       scorecardText    || '',
     ].filter(Boolean).join('\n\n---\n\n');
 
-    // Threshold bajo — cualquier nota real cuenta
     const hasInterviewNotes = allInterviewNotes.trim().length > 5;
 
-    // Campos logísticos separados para que Claude los use directamente
     const logisticBlock = [
-      salary       ? `SALARIO PRETENDIDO: ${salary}`       : '',
-      availability ? `DISPONIBILIDAD: ${availability}`     : '',
+      salary       ? `SALARIO PRETENDIDO: ${salary}`   : '',
+      availability ? `DISPONIBILIDAD: ${availability}` : '',
     ].filter(Boolean).join('\n');
     const otherDocsBlock = otherSections.length ? `\nDOCUMENTOS ADICIONALES:\n${otherSections.join('\n---\n')}\n` : '';
 
-    // ── Build prompt ──────────────────────────────────────────────────────────
     const prompt = `Sos un recruiter senior de HWG Talent Consultants preparando una presentación para un cliente.
 
 CONTEXTO: El cliente va a leer MUCHOS reportes. Si todos suenan igual, perdemos credibilidad. Cada reporte tiene que reflejar a ESA persona específica, con sus palabras, su historia, sus motivaciones reales.
@@ -185,7 +174,6 @@ INSTRUCCIONES CRÍTICAS:
 Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), con esta estructura exacta:
 {"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","englishLevel":"string"},"tools":[{"tool":"string","years":"string"}],"experience":[{"role":"string","company":"string","period":"string"}],"storytelling":"string","gap":[{"title":"string","detail":"string"}],"recommendation":"string"}`;
 
-    // ── Call Claude ───────────────────────────────────────────────────────────
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -194,7 +182,7 @@ Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), c
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 2500,
         messages: [{ role: 'user', content: prompt }]
       })
