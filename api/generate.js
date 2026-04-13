@@ -5,7 +5,7 @@ const path = require('path');
 // ─── CONFIGURACIÓN DE PROVEEDOR ───────────────────────────────────────────────
 // Para cambiar de proveedor: modificá solo esta variable.
 // Opciones: 'gemini' (gratis hasta 1500 req/día) | 'claude' | 'openai'
-const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini';
+const AI_PROVIDER = process.env.AI_PROVIDER || 'claude';
 
 async function callAI(prompt) {
   if (AI_PROVIDER === 'gemini') {
