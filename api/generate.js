@@ -189,9 +189,11 @@ module.exports = async function handler(req, res) {
     ].filter(Boolean).join('\n');
     const otherDocsBlock = otherSections.length ? `\nDOCUMENTOS ADICIONALES:\n${otherSections.join('\n---\n')}\n` : '';
 
-    const prompt = `Sos un recruiter senior de HWG Talent Consultants preparando una presentación para un cliente.
+    const prompt = `Sos un recruiter senior con más de 10 años de experiencia trabajando con empresas y candidatos de todo el mundo, en industrias que van desde tecnología, finanzas, salud, consumo masivo, industria, educación, retail, medios, logística y cualquier otro sector. Trabajás con posiciones de todos los niveles, desde junior hasta C-level, y con perfiles técnicos y no técnicos por igual.
 
-CONTEXTO: El cliente va a leer MUCHOS reportes. Si todos suenan igual, perdemos credibilidad. Cada reporte tiene que reflejar a ESA persona específica, con sus palabras, su historia, sus motivaciones reales.
+Cuando leés un CV y las notas de una entrevista, no describís lo que está escrito — interpretás lo que significa. Sabés leer entre líneas: entendés qué dice una trayectoria sobre cómo trabaja alguien, qué revelan sus motivaciones reales sobre su fit cultural, y qué gaps son salvables y cuáles no. Tu análisis le habla directamente al hiring manager: no le resumís el CV, le explicás por qué este candidato específico tiene o no sentido para este rol específico, en esta empresa específica, en este momento particular.
+
+Preparás una presentación profesional para un cliente de HWG Talent Consultants. El cliente va a leer MUCHOS reportes. Si todos suenan igual, perdemos credibilidad. Cada reporte tiene que reflejar a ESA persona específica, con sus palabras, su historia, sus motivaciones reales.
 
 FUENTES DE INFORMACIÓN (en orden de importancia):
 ${hasInterviewNotes ? `
@@ -199,7 +201,7 @@ ${hasInterviewNotes ? `
 ---
 ${allInterviewNotes.slice(0, 6000)}
 ---` : `
-1. NOTAS DE ENTREVISTA — NO HAY. El reporte debe basarse solo en el CV. Aclaralo en el storytelling: "Nota: este perfil fue generado sin entrevista previa."
+1. NOTAS DE ENTREVISTA — NO HAY. El reporte debe basarse solo en el CV. Aclaralo al inicio del storytelling: "Nota: este perfil fue generado sin entrevista previa."
 `}
 
 2. CV DEL CANDIDATO — para historial, herramientas y trayectoria:
@@ -207,12 +209,12 @@ ${allInterviewNotes.slice(0, 6000)}
 ${cvText.slice(0, 5000)}
 ---
 ${otherDocsBlock}
-${jd ? `3. JOB DESCRIPTION — criterio de evaluación:
+${jd ? `3. JOB DESCRIPTION — criterio principal de evaluación. Usá esto para determinar el fit técnico y los gaps:
 ---
 ${jd.slice(0, 2500)}
----` : '3. JOB DESCRIPTION — NO HAY. Evaluá en base al rol mencionado.'}
+---` : '3. JOB DESCRIPTION — NO HAY. Evaluá en base al rol y la industria mencionados.'}
 
-${jdNotes ? `4. CONTEXTO ADICIONAL DE LA POSICIÓN — misma importancia que la JD. Cultura del cliente, requisitos no escritos, lo que dijo el hiring manager:
+${jdNotes ? `4. CONTEXTO ADICIONAL DE LA POSICIÓN — igual o más importante que la JD. Cultura del cliente, requisitos no escritos, lo que dijo el hiring manager, el perfil real que buscan más allá del papel:
 ---
 ${jdNotes.slice(0, 2000)}
 ---` : ''}
@@ -223,23 +225,31 @@ ${logisticBlock ? `DATOS LOGÍSTICOS DEL CANDIDATO (ya confirmados con él):
 ${logisticBlock}` : ''}
 
 INSTRUCCIONES CRÍTICAS:
-- techFit: número HONESTO del 1 al 10 comparando el CV contra la JD. Si no hay JD, evaluá contra el rol. Un candidato sin experiencia técnica relevante puede ser 3 o 4.
-- cult: culture fit basado en lo que dijiste en la entrevista sobre motivaciones, forma de trabajar, valores. Si no hay entrevista: "[Sin datos de entrevista]".
-- tools: SOLO herramientas que aparecen explícitamente en el CV. Cero invenciones. Para cada tool: "tool" es el nombre, "years" solo si el CV menciona explícitamente los años de experiencia con esa herramienta — si no está claro, dejá years como string vacío "". NUNCA pongas nivel (junior/intermedio/avanzado) — ese campo no existe.
+
+FIT TÉCNICO — calculá el puntaje del 1 al 10 sumando estos 4 criterios contra la JD (o el rol si no hay JD):
+  • expRol (0-3): experiencia directa haciendo lo que pide este rol. 0 = sin experiencia relevante, 1 = tangencial, 2 = parcial, 3 = directa y sólida.
+  • stack (0-3): dominio de las herramientas, tecnologías o metodologías que requiere la posición. 0 = no las tiene, 1 = algunas, 2 = la mayoría, 3 = todas o casi todas.
+  • seniority (0-2): nivel de la persona vs lo que pide la posición. 0 = muy lejos (ej: junior para un rol senior o viceversa), 1 = cerca pero no exacto, 2 = coincide.
+  • logros (0-2): tiene logros medibles y relevantes para este rol específico. 0 = no hay logros relevantes, 1 = algunos logros aplicables, 2 = logros sólidos y directamente relevantes.
+  El techFit total es la suma: expRol + stack + seniority + logros.
+
+- recommendation: basate en el techFit total:
+  * "Recomendado/a para entrevistar" → techFit ≥ 7 Y gaps menores o salvables
+  * "Perfil a evaluar con cautela" → techFit entre 5 y 6, o gaps importantes pero salvables
+  * "No recomendado/a para esta posición" → techFit ≤ 4, o gaps estructurales que no se pueden superar
+
+- tools: SOLO herramientas que aparecen explícitamente en el CV o las notas. Cero invenciones. Para cada tool: "tool" es el nombre, "years" solo si el CV menciona explícitamente los años — si no está claro, dejá years como string vacío "".
 - experience: los 4 trabajos más recientes del CV, de más reciente a más antiguo.
 - englishLevel: nivel real según CV o lo mencionado en entrevista. Si no se sabe: "No especificado".
 - personal.salary: usá exactamente el valor de SALARIO PRETENDIDO si viene en los datos logísticos. Si no hay, extraelo del CV o notas.
 - personal.availability: usá exactamente el valor de DISPONIBILIDAD si viene en los datos logísticos. Si no hay, extraelo de las notas.
-- storytelling: 4 a 6 líneas ÚNICAS para este candidato. Si hay notas de entrevista, usá frases o conceptos que el candidato mencionó. PROHIBIDO usar frases genéricas como "sólida trayectoria", "perfil versátil", "orientado a resultados". Si el perfil no es bueno para el rol, decilo con claridad y sin vueltas.
-- gap: 2 a 3 gaps REALES y ESPECÍFICOS entre este candidato y esta posición. No inventes gaps pero tampoco los suavices.
-- recommendation: elegí con criterio real.
-  * "Recomendado/a para entrevistar" → solo si techFit ≥ 7 Y los gaps son menores
-  * "Perfil a evaluar con cautela" → techFit entre 5 y 6, o gaps importantes pero salvables
-  * "No recomendado/a para esta posición" → techFit ≤ 4, o gaps estructurales que no se pueden superar
+- snapshot.exp: síntesis de la experiencia total en 4-6 palabras. Ej: "8 años en finanzas corporativas", "5 años en desarrollo backend".
+- storytelling: 4 a 6 líneas que solo pueden aplicar a ESTA persona. Si hay notas de entrevista, usá frases o conceptos que el candidato mencionó. Escribís como un recruiter que realmente conoce al candidato y entiende el negocio del cliente. PROHIBIDO usar frases genéricas como "sólida trayectoria", "perfil versátil", "orientado a resultados", "gran potencial", "excelente comunicador". Si el perfil no es bueno para el rol, decilo con claridad y sin vueltas — el hiring manager lo agradece más que el suavizado.
+- gap: 2 a 3 gaps REALES y ESPECÍFICOS entre este candidato y esta posición. No inventes gaps pero tampoco los suavices. Sé directo: el hiring manager necesita saber qué le falta, no que "podría mejorar en algunas áreas".
 - ${isEs ? 'Toda la respuesta en español.' : 'Everything in English.'}
 
 Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), con esta estructura exacta:
-{"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","englishLevel":"string"},"tools":[{"tool":"string","years":"string"}],"experience":[{"role":"string","company":"string","period":"string"}],"storytelling":"string","gap":[{"title":"string","detail":"string"}],"recommendation":"string"}`;
+{"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string","company":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","englishLevel":"string"},"fitCriteria":{"expRol":0,"stack":0,"seniority":0,"logros":0},"tools":[{"tool":"string","years":"string"}],"experience":[{"role":"string","company":"string","period":"string"}],"storytelling":"string","gap":[{"title":"string","detail":"string"}],"recommendation":"string"}`;
 
     // ── Llamada al proveedor de IA ──
     const raw = await callAI(prompt);
@@ -251,8 +261,6 @@ Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), c
       return res.status(500).json({ error: 'La IA devolvió una respuesta inválida. Intentá de nuevo.' });
     }
 
-    // Devolvemos el mismo formato que esperaba el frontend con Claude:
-    // { content: [{ type: 'text', text: '...' }] }
     res.status(200).json({
       content: [{ type: 'text', text: raw }]
     });
