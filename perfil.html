@@ -192,7 +192,7 @@ function renderProfile(p) {
         <div class="header-right">
           <div class="header-client-label">Presentado para</div>
           <div class="header-client-name">${d.role || ''}</div>
-          <div class="header-client-company">${d.personal?.company || ''}</div>
+          <div class="header-client-company">${d.personal?.clientCompany || d.personal?.company || ''}</div>
           <div class="header-date">${today}</div>
         </div>
       </div>
@@ -262,6 +262,12 @@ function renderProfile(p) {
         </div>
       </div>
     </div>
+
+    ${d.analisis ? `
+    <div class="section">
+      <div class="section-title">Análisis del recruiter</div>
+      <div class="story-box" style="background:#f0fdf4;border-left-color:#0F6E56;color:#065F46;">${d.analisis}</div>
+    </div>` : ''}
 
     ${d.storytelling ? `
     <div class="section">
