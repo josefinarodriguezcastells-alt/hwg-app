@@ -112,8 +112,19 @@
 </div>
 
 <script>
-const SUPABASE_URL = 'https://YOUR_SUPABASE_URL.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+let SUPABASE_URL = '';
+let SUPABASE_ANON_KEY = '';
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config');
+    const cfg = await res.json();
+    SUPABASE_URL = cfg.supabaseUrl;
+    SUPABASE_ANON_KEY = cfg.supabaseKey;
+  } catch(e) {
+    document.getElementById('app').innerHTML = '<div class="state-box">Error de configuración. Contactá a HWG.</div>';
+  }
+}
 
 function getToken() {
   const params = new URLSearchParams(window.location.search);
@@ -319,6 +330,8 @@ async function markViewed(token) {
 }
 
 async function init() {
+  await loadConfig();
+  if (!SUPABASE_URL) return;
   const token = getToken();
   if (!token) {
     document.getElementById('app').innerHTML = '<div class="state-box">Link inválido. No se encontró el perfil.</div>';
