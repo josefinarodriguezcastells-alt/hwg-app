@@ -173,12 +173,17 @@ module.exports = async function handler(req, res) {
       i++;
     }
 
+    // Fusionar notas del box + archivos de notas como una sola fuente principal
+    const recruiterNoteParts = [
+      interviewerNotes ? `NOTAS DEL RECRUITER (box de texto):\n${interviewerNotes}` : '',
+      ...interviewSections.map((s, idx) => `NOTAS DE ENTREVISTA (archivo ${idx + 1}):\n${s}`),
+    ].filter(Boolean);
+
     const allInterviewNotes = [
-      interviewerNotes || '',
-      candidateNotes   || '',
-      notes            || '',
-      ...interviewSections,
-      scorecardText    || '',
+      recruiterNoteParts.length > 0 ? recruiterNoteParts.join('\n\n') : '',
+      candidateNotes ? `NOTAS GENERALES DEL CANDIDATO:\n${candidateNotes}` : '',
+      notes          ? `CONTEXTO ADICIONAL:\n${notes}`                    : '',
+      scorecardText  ? `SCORECARD:\n${scorecardText}`                     : '',
     ].filter(Boolean).join('\n\n---\n\n');
 
     const hasInterviewNotes = allInterviewNotes.trim().length > 5;
