@@ -32,9 +32,20 @@
   <script type="text/babel">
     const { useState, useRef, useCallback } = React;
 
-    const SUPABASE_URL = 'https://YOUR_SUPABASE_URL.supabase.co';
-    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
-    const APP_URL = 'https://hwg-app.vercel.app';
+    let SUPABASE_URL = '';
+    let SUPABASE_ANON_KEY = '';
+    let APP_URL = 'https://hwg-app.vercel.app';
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const cfg = await res.json();
+        SUPABASE_URL = cfg.supabaseUrl;
+        SUPABASE_ANON_KEY = cfg.supabaseKey;
+        APP_URL = cfg.appUrl;
+      } catch(e) { console.error('Config error', e); }
+    }
+    loadConfig();
 
     function Spinner() {
       return (
