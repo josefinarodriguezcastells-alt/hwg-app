@@ -1,8 +1,11 @@
+// @vercel/node
 const crypto = require('crypto');
 
 module.exports = async function handler(req, res) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+
+  console.log('ENV CHECK:', { url: process.env.SUPABASE_URL?.slice(0,20), key: !!process.env.SUPABASE_ANON_KEY, serviceKey: !!process.env.SUPABASE_SERVICE_KEY });
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
