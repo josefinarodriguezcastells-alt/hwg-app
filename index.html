@@ -32,6 +32,10 @@
   <script type="text/babel">
     const { useState, useRef, useCallback } = React;
 
+    const SUPABASE_URL = 'https://YOUR_SUPABASE_URL.supabase.co';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const APP_URL = 'https://hwg-app.vercel.app';
+
     function Spinner() {
       return (
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,padding:'40px 0'}}>
@@ -41,156 +45,356 @@
       );
     }
 
-    function SnapRow({label, value, accent}) {
-      const ok = !value.includes('[COMPLETAR]');
+    // ── DOTS EDITABLES ──────────────────────────────────────────────────────────
+    function EditableDots({ value, max, onChange }) {
+      const getColor = (pts, total) => {
+        const r = pts / total;
+        if (r >= 0.67) return '#3B6D11';
+        if (r >= 0.34) return '#BA7517';
+        return '#E24B4A';
+      };
       return (
-        <div style={{display:'flex',gap:12,padding:'10px 0',borderBottom:'1px solid #f0f0f0',alignItems:'flex-start'}}>
-          <span style={{fontSize:16,minWidth:22}}>{ok ? '✅' : '⬜'}</span>
-          <span style={{fontWeight:700,minWidth:170,fontSize:14,color:'#374151',flexShrink:0}}>{label}</span>
-          <span style={{fontSize:14,color:'#0F0F0F'}}>{value}</span>
+        <div style={{display:'flex', gap:6, alignItems:'center'}}>
+          {Array.from({length: max}).map((_, i) => (
+            <div
+              key={i}
+              onClick={() => onChange(i + 1 === value ? 0 : i + 1)}
+              title={`${i + 1} / ${max}`}
+              style={{
+                width: 13, height: 13, borderRadius: '50%', cursor: 'pointer',
+                background: i < value ? getColor(value, max) : '#E5E7EB',
+                border: '1.5px solid ' + (i < value ? getColor(value, max) : '#D1D5DB'),
+                transition: 'all 0.15s',
+              }}
+            />
+          ))}
         </div>
       );
     }
 
-    function ResultView({data, lang}) {
-      const [copied, setCopied] = useState(false);
-      const [personal, setPersonal] = useState({
-        position: data.personal?.position || '[COMPLETAR]',
-        linkedin: data.personal?.linkedin || '[COMPLETAR]',
-        phone: data.personal?.phone || '[COMPLETAR]',
-        email: data.personal?.email || '[COMPLETAR]',
-      });
-      const isEs = lang === 'es';
-      const today = new Date().toLocaleDateString(isEs ? 'es-AR' : 'en-US', {day:'2-digit',month:'long',year:'numeric'});
+    // ── PREVIEW DEL PERFIL (vista del recruiter antes de publicar) ──────────────
+    function ProfilePreview({ data, fitCriteria, onFitChange, storytelling, onStoryChange, gaps, onGapsChange, recommendation, onRecChange, personal, onPersonalChange }) {
+      const today = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'});
+      const techFitTotal = (fitCriteria.expRol || 0) + (fitCriteria.stack || 0) + (fitCriteria.seniority || 0) + (fitCriteria.logros || 0);
 
-      const labels = isEs
-        ? {techFit:'Fit técnico', exp:'Experiencia', cult:'Culture fit', lang:'Idiomas', avail:'Disponibilidad', salary:'Pretensión salarial', tools:'Tools & Herramientas', tool:'Herramienta', years:'Años', level:'Nivel & contexto', why:'El candidato/a en 3 líneas'}
-        : {techFit:'Technical fit', exp:'Experience', cult:'Culture fit', lang:'Languages', avail:'Availability', salary:'Salary expectation', tools:'Tools & Stack', tool:'Tool', years:'Years', level:'Level & context', why:'The candidate in 3 lines'};
+      const recColor = recommendation.toLowerCase().includes('no recom') ? { bg: 'rgba(180,30,30,0.35)', color: '#FCA5A5' }
+                     : recommendation.toLowerCase().includes('cautela')  ? { bg: 'rgba(0,0,0,0.25)', color: '#FAC775' }
+                     : { bg: 'rgba(15,110,86,0.35)', color: '#6EE7B7' };
 
-      const personalLabels = isEs
-        ? {position:'Posición', date:'Fecha de presentación', linkedin:'LinkedIn', phone:'Teléfono', email:'Mail'}
-        : {position:'Position', date:'Presentation date', linkedin:'LinkedIn', phone:'Phone', email:'Email'};
-
-      const updatePersonal = (key, val) => setPersonal(p => ({...p, [key]: val}));
+      const tools = Array.isArray(data.tools) ? data.tools : [];
+      const experience = Array.isArray(data.experience) ? data.experience : [];
 
       const inputStyle = {
-        border:'none', borderBottom:'1.5px dashed #d0d0d0', outline:'none',
-        fontSize:14, fontFamily:'DM Sans,sans-serif', color:'#0F0F0F',
-        background:'transparent', padding:'2px 4px', width:'100%'
+        border: 'none', borderBottom: '1.5px dashed #AFA9EC', outline: 'none',
+        fontSize: 13, fontFamily: 'DM Sans,sans-serif', color: '#fff',
+        background: 'transparent', padding: '2px 4px', width: '100%',
       };
 
-      const copyText = () => {
-        const txt = `${data.name}\n${data.role} · ${data.location}\n\n${Object.entries({[labels.techFit]:data.snapshot.techFit,[labels.exp]:data.snapshot.exp,[labels.cult]:data.snapshot.cult,[labels.lang]:data.snapshot.lang,[labels.avail]:data.snapshot.avail,[labels.salary]:data.snapshot.salary}).map(([k,v])=>`✅ ${k}: ${v}`).join('\n')}\n\n${labels.tools}\n${data.tools.map(t=>`${t.tool} | ${t.years} | ${t.level}`).join('\n')}\n\n${labels.why}\n${data.why}\n\nHWG Talent Consultants · ${today}\nwww.hwgtalent.com`;
-        navigator.clipboard.writeText(txt);
-        setCopied(true);
-        setTimeout(()=>setCopied(false), 2000);
+      const sectionStyle = {
+        background: '#fff', borderRadius: 12, padding: '1.25rem 1.5rem',
+        border: '0.5px solid #E5E7EB', marginBottom: '1rem',
+      };
+      const sectionTitle = {
+        fontSize: 11, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase',
+        color: '#6B7280', marginBottom: 14, paddingBottom: 8, borderBottom: '0.5px solid #E5E7EB',
       };
 
-      const sectionPill = (text) => (
-        <div style={{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#6C3BFF',marginBottom:10,paddingLeft:10,borderLeft:'4px solid #C8F135',marginTop:24}}>
-          {text}
+      return (
+        <div style={{maxWidth:720, margin:'0 auto', fontFamily:'DM Sans,sans-serif'}}>
+
+          {/* HEADER */}
+          <div style={{background:'#3C3489', borderRadius:14, padding:'1.5rem 2rem', marginBottom:'1rem'}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'1rem'}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,fontWeight:500,letterSpacing:'0.08em',color:'#CECBF6',textTransform:'uppercase',marginBottom:6}}>HWG Talent Consultants</div>
+                <div style={{fontSize:26,fontWeight:600,color:'#fff',lineHeight:1.2,marginBottom:4}}>{data.name}</div>
+                <div style={{fontSize:14,color:'#AFA9EC'}}>{data.role}{data.location ? ' · ' + data.location : ''}</div>
+                <div style={{marginTop:10}}>
+                  <select
+                    value={recommendation}
+                    onChange={e => onRecChange(e.target.value)}
+                    style={{background:'rgba(0,0,0,0.25)',border:'none',borderRadius:6,padding:'5px 12px',fontSize:11,fontWeight:500,color:recColor.color,cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}
+                  >
+                    <option value="Recomendado/a para entrevistar">Recomendado/a para entrevistar</option>
+                    <option value="Perfil a evaluar con cautela">Perfil a evaluar con cautela</option>
+                    <option value="No recomendado/a para esta posición">No recomendado/a para esta posición</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0,marginLeft:'1rem'}}>
+                <div style={{fontSize:11,color:'#CECBF6',letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4}}>Presentado para</div>
+                <div style={{fontSize:15,fontWeight:500,color:'#fff'}}>{data.role}</div>
+                <div style={{fontSize:13,color:'#AFA9EC',marginTop:2}}>{personal.company || ''}</div>
+                <div style={{fontSize:12,color:'#AFA9EC',marginTop:6}}>{today}</div>
+              </div>
+            </div>
+
+            {/* CONTACTO EDITABLE */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:10,paddingTop:'1rem',borderTop:'0.5px solid rgba(255,255,255,0.15)'}}>
+              {[
+                {label:'LinkedIn', key:'linkedin'},
+                {label:'Teléfono', key:'phone'},
+                {label:'Email', key:'email'},
+                {label:'Pretensión salarial', key:'salary'},
+              ].map(({label, key}) => (
+                <div key={key} style={{display:'flex',flexDirection:'column',gap:3}}>
+                  <span style={{fontSize:10,letterSpacing:'0.06em',textTransform:'uppercase',color:'#CECBF6'}}>{label}</span>
+                  <input
+                    style={inputStyle}
+                    value={personal[key] || ''}
+                    onChange={e => onPersonalChange(key, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* EVALUACIÓN */}
+          <div style={sectionStyle}>
+            <div style={sectionTitle}>Evaluación del candidato</div>
+            <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:'1.5rem',alignItems:'center'}}>
+              <div style={{textAlign:'center',background:'#F5F4F8',borderRadius:10,padding:'16px 20px',minWidth:100}}>
+                <div style={{fontSize:40,fontWeight:600,color:'#534AB7',lineHeight:1}}>{techFitTotal}</div>
+                <div style={{fontSize:13,color:'#6B7280',marginTop:2}}>de 10</div>
+                <div style={{fontSize:10,letterSpacing:'0.06em',textTransform:'uppercase',color:'#6B7280',marginTop:8}}>Fit técnico</div>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%'}}>
+                {[
+                  {label:'Experiencia en el rol', key:'expRol', max:3},
+                  {label:'Stack y herramientas', key:'stack', max:3},
+                  {label:'Seniority vs posición', key:'seniority', max:2},
+                  {label:'Logros medibles relevantes', key:'logros', max:2},
+                ].map(({label, key, max}) => (
+                  <div key={key} style={{display:'flex',flexDirection:'column',gap:5}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <span style={{fontSize:12,color:'#374151'}}>{label}</span>
+                      <span style={{fontSize:11,color:'#6B7280'}}>{fitCriteria[key]} / {max}</span>
+                    </div>
+                    <EditableDots value={fitCriteria[key]} max={max} onChange={v => onFitChange(key, v)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:10,marginTop:12}}>
+              {[
+                {label:'Inglés', value: data.snapshot?.englishLevel || '—'},
+                {label:'Disponibilidad', value: personal.availability || '—'},
+                {label:'Años de experiencia', value: data.snapshot?.exp || '—'},
+              ].map(({label, value}) => (
+                <div key={label} style={{background:'#F5F4F8',borderRadius:8,padding:12,textAlign:'center'}}>
+                  <div style={{fontSize:11,color:'#6B7280',marginBottom:5}}>{label}</div>
+                  <div style={{fontSize:15,fontWeight:500,color:'#111827'}}>{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* MIRADA DEL RECRUITER — EDITABLE */}
+          <div style={sectionStyle}>
+            <div style={sectionTitle}>Mirada del recruiter</div>
+            <textarea
+              value={storytelling}
+              onChange={e => onStoryChange(e.target.value)}
+              style={{
+                width:'100%',minHeight:100,padding:'14px 16px',
+                background:'#EEEDFE',borderLeft:'3px solid #534AB7',
+                borderTop:'none',borderRight:'none',borderBottom:'none',
+                borderRadius:'0 8px 8px 0',fontSize:14,lineHeight:1.75,
+                color:'#3C3489',resize:'vertical',fontFamily:'DM Sans,sans-serif',outline:'none',
+              }}
+            />
+          </div>
+
+          {/* GAPS — EDITABLES */}
+          {gaps.length > 0 && (
+            <div style={sectionStyle}>
+              <div style={sectionTitle}>Gaps a tener en cuenta</div>
+              <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                {gaps.map((g, i) => (
+                  <div key={i} style={{borderLeft:'2px solid #E24B4A',paddingLeft:12}}>
+                    <input
+                      value={g.title || ''}
+                      onChange={e => { const updated = [...gaps]; updated[i] = {...g, title: e.target.value}; onGapsChange(updated); }}
+                      style={{width:'100%',border:'none',borderBottom:'1px dashed #E24B4A',outline:'none',fontSize:13,fontWeight:500,color:'#A32D2D',marginBottom:4,background:'transparent',fontFamily:'DM Sans,sans-serif',padding:'2px 0'}}
+                    />
+                    <input
+                      value={g.detail || ''}
+                      onChange={e => { const updated = [...gaps]; updated[i] = {...g, detail: e.target.value}; onGapsChange(updated); }}
+                      style={{width:'100%',border:'none',borderBottom:'1px dashed #D1D5DB',outline:'none',fontSize:13,color:'#6B7280',background:'transparent',fontFamily:'DM Sans,sans-serif',padding:'2px 0'}}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* STACK */}
+          {tools.length > 0 && (
+            <div style={sectionStyle}>
+              <div style={sectionTitle}>Stack técnico</div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                {tools.map((t,i) => (
+                  <span key={i} style={{background:'#F5F4F8',border:'0.5px solid #E5E7EB',borderRadius:20,padding:'5px 13px',fontSize:13,color:'#374151'}}>
+                    {t.tool}{t.years ? ' · ' + t.years : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TRAYECTORIA */}
+          {experience.length > 0 && (
+            <div style={sectionStyle}>
+              <div style={sectionTitle}>Trayectoria profesional</div>
+              <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                {experience.map((e,i) => (
+                  <div key={i} style={{display:'flex',flexDirection:'column',gap:2}}>
+                    <div style={{fontSize:14,fontWeight:500,color:'#111827'}}>{e.role}</div>
+                    <div style={{fontSize:12,color:'#6B7280'}}>{e.company}{e.period ? ' · ' + e.period : ''}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* FOOTER */}
+          <div style={{paddingTop:12,borderTop:'0.5px solid #E5E7EB',display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8}}>
+            <span style={{fontSize:12,fontWeight:500,color:'#6B7280'}}>HWG Talent Consultants</span>
+            <span style={{fontSize:12,color:'#534AB7'}}>www.hwgtalent.com</span>
+            <span style={{fontSize:12,color:'#6B7280'}}>{today}</span>
+          </div>
+
+          <div style={{marginTop:'1.25rem',fontSize:11,color:'#9CA3AF',lineHeight:1.75}}>
+            * <strong style={{fontWeight:500,color:'#6B7280'}}>Cómo se calcula el fit técnico:</strong> el puntaje del 1 al 10 se construye sobre cuatro criterios evaluados contra la job description: experiencia directa en el rol (0–3 pts), dominio de herramientas y stack requerido (0–3 pts), nivel de seniority vs lo que pide la posición (0–2 pts), y logros medibles relevantes para el puesto (0–2 pts). Un puntaje de 7 o más indica recomendación para entrevistar. Entre 5 y 6, perfil a evaluar con cautela. Por debajo de 5, no recomendado para esta posición.
+          </div>
         </div>
       );
+    }
 
-      const downloadWord = async () => {
+    // ── RESULT VIEW ─────────────────────────────────────────────────────────────
+    function ResultView({data, lang, candidateId, positionId, recruiterId}) {
+      const [fitCriteria, setFitCriteria] = useState({
+        expRol:   data.fitCriteria?.expRol   ?? 0,
+        stack:    data.fitCriteria?.stack    ?? 0,
+        seniority:data.fitCriteria?.seniority?? 0,
+        logros:   data.fitCriteria?.logros   ?? 0,
+      });
+      const [storytelling, setStorytelling] = useState(data.storytelling || '');
+      const [gaps, setGaps] = useState(Array.isArray(data.gap) ? data.gap : []);
+      const [recommendation, setRecommendation] = useState(data.recommendation || '');
+      const [personal, setPersonal] = useState({
+        linkedin:     data.personal?.linkedin     || '',
+        phone:        data.personal?.phone        || '',
+        email:        data.personal?.email        || '',
+        salary:       data.personal?.salary       || '',
+        availability: data.personal?.availability || '',
+        company:      data.personal?.company      || '',
+      });
+      const [publishing, setPublishing] = useState(false);
+      const [publishedUrl, setPublishedUrl] = useState(null);
+      const [copied, setCopied] = useState(false);
+
+      const updateFit = (key, val) => setFitCriteria(prev => ({...prev, [key]: val}));
+      const updatePersonal = (key, val) => setPersonal(prev => ({...prev, [key]: val}));
+
+      const techFitTotal = (fitCriteria.expRol||0) + (fitCriteria.stack||0) + (fitCriteria.seniority||0) + (fitCriteria.logros||0);
+
+      const buildProfileData = () => ({
+        ...data,
+        storytelling,
+        gap: gaps,
+        recommendation,
+        personal,
+        snapshot: {
+          ...data.snapshot,
+          techFit: String(techFitTotal),
+        },
+        fitCriteria,
+      });
+
+      const publish = async () => {
+        setPublishing(true);
         try {
-          const res = await fetch('/api/docx', {
+          const profileData = buildProfileData();
+          const res = await fetch('/api/save-profile', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({data: {...data, personal}, lang, today})
+            body: JSON.stringify({
+              profile_data: profileData,
+              candidate_id: candidateId || null,
+              position_id:  positionId  || null,
+              recruiter_id: recruiterId || null,
+            })
           });
-          if (!res.ok) throw new Error('Error generando documento');
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${data.name.replace(/\s+/g, '_')}_HWG.docx`;
-          a.click();
-          URL.revokeObjectURL(url);
+          const result = await res.json();
+          if (!res.ok || result.error) throw new Error(result.error || 'Error al publicar');
+          setPublishedUrl(result.url);
         } catch(e) {
-          alert('Error al descargar. Intentá de nuevo.');
+          alert('Error al publicar: ' + e.message);
+        } finally {
+          setPublishing(false);
         }
       };
 
+      const copyLink = () => {
+        navigator.clipboard.writeText(publishedUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      };
+
       return (
-        <div className="fade-in" style={{background:'#fff',borderRadius:16,padding:32,border:'2px solid #6C3BFF',boxShadow:'0 0 0 4px #6C3BFF18',marginTop:24}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20,flexWrap:'wrap',gap:12}}>
+        <div className="fade-in" style={{marginTop:24}}>
+
+          {/* BARRA DE ACCIÓN */}
+          <div style={{background:'#fff',borderRadius:12,padding:'16px 20px',marginBottom:20,border:'1.5px solid #6C3BFF',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
             <div>
-              <div style={{fontSize:26,fontWeight:800,fontFamily:"'DM Serif Display',serif",lineHeight:1.2}}>{data.name}</div>
-              <div style={{color:'#888',fontSize:14,marginTop:4}}>{data.role} · {data.location} · {data.modality}</div>
+              <div style={{fontSize:13,fontWeight:600,color:'#3C3489'}}>Vista previa — {data.name}</div>
+              <div style={{fontSize:12,color:'#6B7280',marginTop:2}}>Editá los puntitos, el texto y la recomendación antes de publicar.</div>
             </div>
-            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-              <button onClick={downloadWord} style={{padding:'9px 18px',background:'#0F0F0F',border:'none',color:'#C8F135',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'DM Sans,sans-serif',whiteSpace:'nowrap'}}>
-                ⬇ Descargar Word
-              </button>
-              <button onClick={copyText} style={{padding:'9px 18px',background:'#F9F6F1',border:'1.5px solid #6C3BFF',color:'#6C3BFF',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'DM Sans,sans-serif',whiteSpace:'nowrap'}}>
-                {copied ? '✓ Copiado' : 'Copiar texto'}
-              </button>
+            <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+              {!publishedUrl ? (
+                <button
+                  onClick={publish}
+                  disabled={publishing}
+                  style={{padding:'10px 22px',background:publishing?'#ccc':'#3C3489',color:'#fff',border:'none',borderRadius:8,fontSize:13,fontWeight:600,cursor:publishing?'not-allowed':'pointer',fontFamily:'DM Sans,sans-serif',whiteSpace:'nowrap'}}
+                >
+                  {publishing ? 'Publicando...' : 'Publicar y copiar link →'}
+                </button>
+              ) : (
+                <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+                  <div style={{background:'#F0EBFF',borderRadius:8,padding:'8px 14px',fontSize:12,color:'#534AB7',fontWeight:500,maxWidth:300,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    {publishedUrl}
+                  </div>
+                  <button
+                    onClick={copyLink}
+                    style={{padding:'9px 18px',background:copied?'#0F6E56':'#6C3BFF',color:'#fff',border:'none',borderRadius:8,fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'DM Sans,sans-serif',whiteSpace:'nowrap',transition:'background 0.2s'}}
+                  >
+                    {copied ? '✓ Copiado' : 'Copiar link'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          {sectionPill(isEs ? 'Información personal' : 'Personal Information')}
-          {[
-            [personalLabels.position, 'position'],
-            [personalLabels.date, null],
-            [personalLabels.linkedin, 'linkedin'],
-            [personalLabels.phone, 'phone'],
-            [personalLabels.email, 'email'],
-          ].map(([label, key], i) => (
-            <div key={i} style={{display:'flex',gap:12,padding:'10px 0',borderBottom:'1px solid #f0f0f0',alignItems:'center'}}>
-              <span style={{fontWeight:700,minWidth:170,fontSize:14,color:'#374151',flexShrink:0}}>{label}</span>
-              {key
-                ? <input style={inputStyle} value={personal[key]} onChange={e=>updatePersonal(key, e.target.value)} />
-                : <span style={{fontSize:14,color:'#0F0F0F'}}>{today}</span>
-              }
-            </div>
-          ))}
-
-          {sectionPill('Quick Snapshot')}
-          {[
-            [labels.techFit, data.snapshot.techFit],
-            [labels.exp,     data.snapshot.exp],
-            [labels.cult,    data.snapshot.cult],
-            [labels.lang,    data.snapshot.lang],
-            [labels.avail,   data.snapshot.avail],
-            [labels.salary,  data.snapshot.salary],
-          ].map(([l,v],i) => <SnapRow key={i} label={l} value={v} />)}
-
-          {sectionPill(labels.tools)}
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:14,marginBottom:8}}>
-            <thead>
-              <tr style={{borderBottom:'2px solid #6C3BFF'}}>
-                {[labels.tool, labels.years, labels.level].map((h,i)=>(
-                  <th key={i} style={{textAlign:i===1?'center':'left',padding:'6px 10px',color:'#888',fontWeight:600,fontSize:12}}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.tools.map((row,i)=>(
-                <tr key={i} style={{background:i%2===0?'#F9F6F1':'#fff'}}>
-                  <td style={{padding:'9px 10px',fontWeight:700}}>{row.tool}</td>
-                  <td style={{padding:'9px 10px',textAlign:'center',color:'#6C3BFF',fontWeight:700}}>{row.years}</td>
-                  <td style={{padding:'9px 10px',color:'#6b7280'}}>{row.level}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {sectionPill(labels.why)}
-          <div style={{background:'#F9F6F1',borderLeft:'4px solid #C8F135',padding:'14px 18px',borderRadius:'0 8px 8px 0',fontSize:15,lineHeight:1.7,color:'#374151',fontStyle:'italic',marginBottom:20}}>
-            {data.why}
-          </div>
-
-          <div style={{textAlign:'center',borderTop:'1px solid #ebebeb',paddingTop:16}}>
-            <div style={{color:'#999',fontSize:13}}>
-              {isEs ? 'Presentado por' : 'Presented by'} <strong style={{color:'#0F0F0F'}}>HWG Talent Consultants</strong> · {today}
-            </div>
-            <div style={{color:'#6C3BFF',fontWeight:700,fontSize:13,marginTop:2}}>www.hwgtalent.com</div>
-          </div>
+          {/* PREVIEW */}
+          <ProfilePreview
+            data={data}
+            fitCriteria={fitCriteria}
+            onFitChange={updateFit}
+            storytelling={storytelling}
+            onStoryChange={setStorytelling}
+            gaps={gaps}
+            onGapsChange={setGaps}
+            recommendation={recommendation}
+            onRecChange={setRecommendation}
+            personal={personal}
+            onPersonalChange={updatePersonal}
+          />
         </div>
       );
     }
 
+    // ── APP ──────────────────────────────────────────────────────────────────────
     function App() {
       const params = new URLSearchParams(window.location.search);
       const [lang, setLang] = useState('es');
@@ -206,6 +410,11 @@
       const [error, setError] = useState(null);
       const fileRef = useRef();
       const interviewRef = useRef();
+
+      // IDs opcionales pasados por el ATS via query params
+      const candidateId = params.get('candidate_id') || null;
+      const positionId  = params.get('position_id')  || null;
+      const recruiterId = params.get('recruiter_id') || null;
 
       const readFile = useCallback(async (f) => {
         setFile(f); setResult(null);
@@ -238,9 +447,8 @@
       }, [readFile]);
 
       const generate = async () => {
-        if (!file) { setError(lang === 'es' ? 'Por favor subí un CV antes de continuar.' : 'Please upload a CV before continuing.'); return; }
-        setError(null); setLoading(true); setResult(null);
-
+        if (!file && !fileText) return alert('Subí el CV primero.');
+        setLoading(true); setResult(null); setError(null);
         try {
           const formData = new FormData();
           formData.append('cv', file);
@@ -258,7 +466,7 @@
           const raw = (data.content||[]).map(c=>c.text||'').join('').replace(/```json|```/g,'').trim();
           const parsed = JSON.parse(raw);
           if (!parsed.personal) parsed.personal = {};
-          parsed.personal.position = position || '[COMPLETAR]';
+          parsed.personal.position = position || '';
           setResult(parsed);
         } catch(e) {
           setError(e.message || 'Hubo un error al procesar el CV. Intentá de nuevo.');
@@ -288,7 +496,7 @@
               CV → Presentación<br/><span style={{color:'#6C3BFF'}}>en 10 segundos.</span>
             </div>
             <div style={{color:'#666',fontSize:16,marginBottom:40,lineHeight:1.6}}>
-              Subí el CV, elegí el idioma, y la presentación HWG sale lista.
+              Subí el CV, revisá el preview, editá lo que necesites y publicá el link para el cliente.
             </div>
 
             {position && (
@@ -376,7 +584,15 @@
             </div>
 
             {loading && <Spinner />}
-            {result && !loading && <ResultView data={result} lang={lang} />}
+            {result && !loading && (
+              <ResultView
+                data={result}
+                lang={lang}
+                candidateId={candidateId}
+                positionId={positionId}
+                recruiterId={recruiterId}
+              />
+            )}
           </div>
         </div>
       );
