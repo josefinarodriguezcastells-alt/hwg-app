@@ -1,20 +1,13 @@
 {
+  "rewrites": [
+    { "source": "/perfil", "destination": "/perfil.html" }
+  ],
   "functions": {
-    "api/generate.js": {
-      "maxDuration": 60
-    },
-    "api/extract-profile.js": {
-      "maxDuration": 60
-    },
-    "api/docx.js": {
-      "maxDuration": 60
-    },
-    "api/save-profile.js": {
-      "maxDuration": 30
-    },
-    "api/config.js": {
-      "maxDuration": 10
-    }
+    "api/generate.js": { "maxDuration": 60 },
+    "api/extract-profile.js": { "maxDuration": 60 },
+    "api/docx.js": { "maxDuration": 60 },
+    "api/save-profile.js": { "maxDuration": 30 },
+    "api/config.js": { "maxDuration": 10 }
   },
   "headers": [
     {
