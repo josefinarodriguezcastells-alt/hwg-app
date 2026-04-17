@@ -43,7 +43,12 @@ async function callAI(prompt) {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error?.message || 'Claude error');
-    return (data.content || []).map(c => c.text || '').join('').replace(/```json|```/g, '').trim();
+    // Solo tomar bloques de tipo 'text', ignorar tool_use y otros
+    const textBlocks = (data.content || []).filter(c => c.type === 'text').map(c => c.text || '');
+    const joined = textBlocks.join('').replace(/```json[\s\S]*?```|```/g, '').trim();
+    // Extraer solo el JSON si hay texto antes o después
+    const jsonMatch = joined.match(/\{[\s\S]*\}/);
+    return jsonMatch ? jsonMatch[0] : joined;
   }
 
   if (AI_PROVIDER === 'openai') {
