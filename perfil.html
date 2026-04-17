@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HWG Talent — Perfil de candidato</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #F5F4F8; font-family: 'DM Sans', sans-serif; color: #111827; padding: 2rem 1rem 4rem; }
+
+    .page { max-width: 720px; margin: 0 auto; }
+
+    /* HEADER */
+    .header { background: #3C3489; border-radius: 14px; padding: 1.5rem 2rem; margin-bottom: 1.25rem; }
+    .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+    .header-tag { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #CECBF6; text-transform: uppercase; margin-bottom: 6px; }
+    .header-name { font-size: 26px; font-weight: 600; color: #fff; line-height: 1.2; margin-bottom: 4px; }
+    .header-role { font-size: 14px; color: #AFA9EC; }
+    .header-right { text-align: right; flex-shrink: 0; margin-left: 1rem; }
+    .header-client-label { font-size: 11px; color: #CECBF6; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
+    .header-client-name { font-size: 15px; font-weight: 500; color: #fff; }
+    .header-client-company { font-size: 13px; color: #AFA9EC; margin-top: 2px; }
+    .header-date { font-size: 12px; color: #AFA9EC; margin-top: 6px; }
+
+    .rec-badge { display: inline-block; margin-top: 10px; border-radius: 6px; padding: 5px 12px; font-size: 11px; font-weight: 500; }
+    .rec-green { background: rgba(15,110,86,0.35); color: #6EE7B7; }
+    .rec-amber { background: rgba(0,0,0,0.25); color: #FAC775; }
+    .rec-red   { background: rgba(180,30,30,0.35); color: #FCA5A5; }
+
+    .header-contact { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding-top: 1rem; border-top: 0.5px solid rgba(255,255,255,0.15); }
+    .hc-item { display: flex; flex-direction: column; gap: 3px; }
+    .hc-label { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #CECBF6; }
+    .hc-value { font-size: 12px; color: #fff; word-break: break-all; }
+    .hc-value a { color: #CECBF6; text-decoration: underline; }
+
+    /* SECCIONES */
+    .section { margin-bottom: 1.25rem; background: #fff; border-radius: 12px; padding: 1.25rem 1.5rem; border: 0.5px solid #E5E7EB; }
+    .section-title { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #6B7280; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 0.5px solid #E5E7EB; }
+
+    /* EVALUACIÓN */
+    .eval-wrap { display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; align-items: center; }
+    .fit-score-block { text-align: center; background: #F5F4F8; border-radius: 10px; padding: 16px 20px; min-width: 100px; }
+    .fit-score-num { font-size: 40px; font-weight: 600; color: #534AB7; line-height: 1; }
+    .fit-score-den { font-size: 13px; color: #6B7280; margin-top: 2px; }
+    .fit-score-label { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7280; margin-top: 8px; }
+
+    .fit-criteria { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+    .criterion { display: flex; flex-direction: column; gap: 5px; }
+    .criterion-header { display: flex; justify-content: space-between; align-items: center; }
+    .criterion-label { font-size: 12px; color: #374151; }
+    .criterion-pts { font-size: 11px; color: #6B7280; }
+    .dots { display: flex; gap: 5px; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; background: #E5E7EB; }
+    .dot.low  { background: #E24B4A; }
+    .dot.mid  { background: #BA7517; }
+    .dot.high { background: #3B6D11; }
+
+    .snap-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .snap-card { background: #F5F4F8; border-radius: 8px; padding: 12px; text-align: center; }
+    .snap-label { font-size: 11px; color: #6B7280; margin-bottom: 5px; }
+    .snap-value { font-size: 15px; font-weight: 500; color: #111827; }
+    .snap-value.green { color: #0F6E56; }
+
+    /* RECRUITER */
+    .story-box { background: #EEEDFE; border-left: 3px solid #534AB7; border-radius: 0 8px 8px 0; padding: 14px 16px; font-size: 14px; line-height: 1.75; color: #3C3489; }
+
+    /* GAPS */
+    .gap-list { display: flex; flex-direction: column; gap: 12px; }
+    .gap-item { border-left: 2px solid #E24B4A; padding-left: 12px; }
+    .gap-title { font-size: 13px; font-weight: 500; color: #A32D2D; margin-bottom: 3px; }
+    .gap-detail { font-size: 13px; color: #6B7280; line-height: 1.55; }
+
+    /* STACK */
+    .tools-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tool-chip { background: #F5F4F8; border: 0.5px solid #E5E7EB; border-radius: 20px; padding: 5px 13px; font-size: 13px; color: #374151; }
+
+    /* TRAYECTORIA */
+    .exp-list { display: flex; flex-direction: column; gap: 12px; }
+    .exp-item { display: flex; flex-direction: column; gap: 2px; }
+    .exp-role { font-size: 14px; font-weight: 500; color: #111827; }
+    .exp-meta { font-size: 12px; color: #6B7280; }
+
+    /* FOOTER */
+    .footer { margin-top: 1.5rem; padding-top: 12px; border-top: 0.5px solid #E5E7EB; display: flex; justify-content: space-between; align-items: center; }
+    .footer-brand { font-size: 12px; font-weight: 500; color: #6B7280; }
+    .footer-url { font-size: 12px; color: #534AB7; }
+    .footer-date { font-size: 12px; color: #6B7280; }
+
+    /* NOTA FIT */
+    .fit-note { margin-top: 1.25rem; font-size: 11px; color: #9CA3AF; line-height: 1.75; }
+    .fit-note strong { font-weight: 500; color: #6B7280; }
+
+    /* LOADING / ERROR */
+    .state-box { text-align: center; padding: 4rem 2rem; color: #6B7280; font-size: 15px; }
+    .spinner { width: 32px; height: 32px; border: 2px solid #E5E7EB; border-top-color: #534AB7; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      .header-contact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .eval-wrap { grid-template-columns: 1fr; }
+      .fit-score-block { width: 100%; }
+      .snap-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .header-top { flex-direction: column; gap: 1rem; }
+      .header-right { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+<div class="page" id="app">
+  <div class="state-box"><div class="spinner"></div>Cargando perfil...</div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://YOUR_SUPABASE_URL.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+function getToken() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('token');
+}
+
+function recClass(rec) {
+  if (!rec) return 'rec-amber';
+  const r = rec.toLowerCase();
+  if (r.includes('no recom')) return 'rec-red';
+  if (r.includes('cautela')) return 'rec-amber';
+  return 'rec-green';
+}
+
+function dots(filled, total, colorClass) {
+  let html = '<div class="dots">';
+  for (let i = 0; i < total; i++) {
+    html += `<div class="dot ${i < filled ? colorClass : ''}"></div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function dotColor(pts, max) {
+  const ratio = pts / max;
+  if (ratio >= 0.67) return 'high';
+  if (ratio >= 0.34) return 'mid';
+  return 'low';
+}
+
+function renderProfile(p) {
+  const today = new Date(p.published_at || Date.now())
+    .toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  const d = p.profile_data;
+  const criteria = d.fitCriteria || {
+    expRol: 0, stack: 0, seniority: 0, logros: 0
+  };
+
+  const techFitNum = parseInt(d.snapshot?.techFit) || 0;
+
+  const gapItems = Array.isArray(d.gap)
+    ? d.gap
+    : (d.gap ? [{ title: 'Gap', detail: d.gap }] : []);
+
+  const tools = Array.isArray(d.tools) ? d.tools : [];
+  const experience = Array.isArray(d.experience) ? d.experience : [];
+
+  const contactItems = [
+    { label: 'LinkedIn', value: d.personal?.linkedin, isLink: true },
+    { label: 'Teléfono', value: d.personal?.phone },
+    { label: 'Email', value: d.personal?.email },
+    { label: 'Pretensión salarial', value: d.personal?.salary },
+  ];
+
+  document.getElementById('app').innerHTML = `
+    <div class="header">
+      <div class="header-top">
+        <div>
+          <div class="header-tag">HWG Talent Consultants</div>
+          <div class="header-name">${d.name || ''}</div>
+          <div class="header-role">${d.role || ''}${d.location ? ' &nbsp;·&nbsp; ' + d.location : ''}</div>
+          <span class="rec-badge ${recClass(d.recommendation)}">${d.recommendation || ''}</span>
+        </div>
+        <div class="header-right">
+          <div class="header-client-label">Presentado para</div>
+          <div class="header-client-name">${d.role || ''}</div>
+          <div class="header-client-company">${d.personal?.company || ''}</div>
+          <div class="header-date">${today}</div>
+        </div>
+      </div>
+      <div class="header-contact">
+        ${contactItems.map(c => `
+          <div class="hc-item">
+            <span class="hc-label">${c.label}</span>
+            <span class="hc-value">
+              ${c.isLink && c.value ? `<a href="${c.value.startsWith('http') ? c.value : 'https://' + c.value}" target="_blank">${c.value.replace('https://','').replace('http://','')}</a>` : (c.value || '—')}
+            </span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Evaluación del candidato</div>
+      <div class="eval-wrap">
+        <div class="fit-score-block">
+          <div class="fit-score-num">${techFitNum}</div>
+          <div class="fit-score-den">de 10</div>
+          <div class="fit-score-label">Fit técnico</div>
+        </div>
+        <div class="fit-criteria">
+          <div class="criterion">
+            <div class="criterion-header">
+              <span class="criterion-label">Experiencia en el rol</span>
+              <span class="criterion-pts">${criteria.expRol} / 3</span>
+            </div>
+            ${dots(criteria.expRol, 3, dotColor(criteria.expRol, 3))}
+          </div>
+          <div class="criterion">
+            <div class="criterion-header">
+              <span class="criterion-label">Stack y herramientas</span>
+              <span class="criterion-pts">${criteria.stack} / 3</span>
+            </div>
+            ${dots(criteria.stack, 3, dotColor(criteria.stack, 3))}
+          </div>
+          <div class="criterion">
+            <div class="criterion-header">
+              <span class="criterion-label">Seniority vs posición</span>
+              <span class="criterion-pts">${criteria.seniority} / 2</span>
+            </div>
+            ${dots(criteria.seniority, 2, dotColor(criteria.seniority, 2))}
+          </div>
+          <div class="criterion">
+            <div class="criterion-header">
+              <span class="criterion-label">Logros medibles relevantes</span>
+              <span class="criterion-pts">${criteria.logros} / 2</span>
+            </div>
+            ${dots(criteria.logros, 2, dotColor(criteria.logros, 2))}
+          </div>
+        </div>
+      </div>
+      <div class="snap-row">
+        <div class="snap-card">
+          <div class="snap-label">Inglés</div>
+          <div class="snap-value ${(d.snapshot?.englishLevel || '').toLowerCase().includes('avan') ? 'green' : ''}">${d.snapshot?.englishLevel || '—'}</div>
+        </div>
+        <div class="snap-card">
+          <div class="snap-label">Disponibilidad</div>
+          <div class="snap-value">${d.personal?.availability || '—'}</div>
+        </div>
+        <div class="snap-card">
+          <div class="snap-label">Años de experiencia</div>
+          <div class="snap-value">${d.snapshot?.exp || '—'}</div>
+        </div>
+      </div>
+    </div>
+
+    ${d.storytelling ? `
+    <div class="section">
+      <div class="section-title">Mirada del recruiter</div>
+      <div class="story-box">${d.storytelling}</div>
+    </div>` : ''}
+
+    ${gapItems.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Gaps a tener en cuenta</div>
+      <div class="gap-list">
+        ${gapItems.map(g => `
+          <div class="gap-item">
+            <div class="gap-title">${g.title || ''}</div>
+            <div class="gap-detail">${g.detail || ''}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : ''}
+
+    ${tools.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Stack técnico</div>
+      <div class="tools-wrap">
+        ${tools.map(t => `<span class="tool-chip">${t.tool}${t.years ? ' · ' + t.years : ''}</span>`).join('')}
+      </div>
+    </div>` : ''}
+
+    ${experience.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Trayectoria profesional</div>
+      <div class="exp-list">
+        ${experience.map(e => `
+          <div class="exp-item">
+            <div class="exp-role">${e.role || ''}</div>
+            <div class="exp-meta">${e.company || ''}${e.period ? ' &nbsp;·&nbsp; ' + e.period : ''}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : ''}
+
+    <div class="footer">
+      <span class="footer-brand">HWG Talent Consultants</span>
+      <span class="footer-url">www.hwgtalent.com</span>
+      <span class="footer-date">${today}</span>
+    </div>
+
+    <div class="fit-note">
+      * <strong>Cómo se calcula el fit técnico:</strong> el puntaje del 1 al 10 se construye sobre cuatro criterios evaluados contra la job description: experiencia directa en el rol (0–3 pts), dominio de herramientas y stack requerido (0–3 pts), nivel de seniority vs lo que pide la posición (0–2 pts), y logros medibles relevantes para el puesto (0–2 pts). Un puntaje de 7 o más indica recomendación para entrevistar. Entre 5 y 6, perfil a evaluar con cautela. Por debajo de 5, no recomendado para esta posición.
+    </div>
+  `;
+}
+
+async function markViewed(token) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?token=eq.${token}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ viewed_at: new Date().toISOString() }),
+    });
+  } catch(e) { /* silencioso */ }
+}
+
+async function init() {
+  const token = getToken();
+  if (!token) {
+    document.getElementById('app').innerHTML = '<div class="state-box">Link inválido. No se encontró el perfil.</div>';
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/candidate_presentations?token=eq.${encodeURIComponent(token)}&select=*`,
+      {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        }
+      }
+    );
+    const rows = await res.json();
+    if (!rows || rows.length === 0) {
+      document.getElementById('app').innerHTML = '<div class="state-box">Perfil no encontrado o link expirado.</div>';
+      return;
+    }
+    const presentation = rows[0];
+    renderProfile(presentation);
+    markViewed(token);
+  } catch(e) {
+    document.getElementById('app').innerHTML = `<div class="state-box">Error cargando el perfil: ${e.message}</div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
