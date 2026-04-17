@@ -42,11 +42,13 @@ async function callAI(prompt) {
       })
     });
     const data = await response.json();
+    console.log('Claude response status:', response.status);
+    console.log('Claude response keys:', Object.keys(data));
+    console.log('Claude content blocks:', JSON.stringify((data.content || []).map(c => ({type: c.type, len: (c.text||'').length}))));
+    if (data.error) console.log('Claude error:', JSON.stringify(data.error));
     if (!response.ok) throw new Error(data.error?.message || 'Claude error');
-    // Solo tomar bloques de tipo 'text', ignorar tool_use y otros
     const textBlocks = (data.content || []).filter(c => c.type === 'text').map(c => c.text || '');
-    const joined = textBlocks.join('').replace(/```json[\s\S]*?```|```/g, '').trim();
-    // Extraer solo el JSON si hay texto antes o después
+    const joined = textBlocks.join('').replace(/```json|```/g, '').trim();
     const jsonMatch = joined.match(/\{[\s\S]*\}/);
     return jsonMatch ? jsonMatch[0] : joined;
   }
