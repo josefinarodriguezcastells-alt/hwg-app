@@ -37,7 +37,7 @@ async function callAI(prompt) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2500,
+        max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -55,7 +55,7 @@ async function callAI(prompt) {
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        max_tokens: 2500,
+        max_tokens: 4000,
         temperature: 0.3,
         messages: [{ role: 'user', content: prompt }]
       })
