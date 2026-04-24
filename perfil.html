@@ -81,6 +81,11 @@
     .exp-role { font-size: 14px; font-weight: 500; color: #111827; }
     .exp-meta { font-size: 12px; color: #6B7280; }
 
+    /* FIT CULTURAL */
+    .cult-box { background: #F5F3FF; border-left: 3px solid #7C3AED; border-radius: 0 8px 8px 0; padding: 14px 16px; font-size: 14px; line-height: 1.75; color: #3C3489; }
+    .cult-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .cult-tag { background: #EDE9FE; border: 0.5px solid #C4B5FD; border-radius: 20px; padding: 3px 11px; font-size: 11px; color: #5B21B6; font-weight: 500; }
+
     /* FOOTER */
     .footer { margin-top: 1.5rem; padding-top: 12px; border-top: 0.5px solid #E5E7EB; display: flex; justify-content: space-between; align-items: center; }
     .footer-brand { font-size: 12px; font-weight: 500; color: #6B7280; }
@@ -307,6 +312,16 @@ function renderProfile(p) {
           </div>
         `).join('')}
       </div>
+    </div>` : ''}
+
+    ${(d.fitCultural && d.fitCultural.trim()) ? `
+    <div class="section">
+      <div class="section-title">🧬 Fit cultural</div>
+      ${(d.culturalTags && d.culturalTags.length > 0) ? `
+      <div class="cult-tags">
+        ${d.culturalTags.map(t => `<span class="cult-tag">${t}</span>`).join('')}
+      </div>` : ''}
+      <div class="cult-box">${d.fitCultural}</div>
     </div>` : ''}
 
     <div class="footer">
