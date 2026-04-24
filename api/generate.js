@@ -103,6 +103,9 @@ module.exports = async function handler(req, res) {
     const scorecardText     = get(fields.scorecard);
     const cvUrl             = get(fields.cv_url);
     const isEs              = lang === 'es';
+    const culturalTagsRaw   = get(fields.cultural_tags);
+    const culturalComment   = get(fields.cultural_comment);
+    const posCulturalTagsRaw= get(fields.pos_cultural_tags);
 
     const extractText = async (file) => {
       if (!file) return '';
@@ -195,6 +198,28 @@ module.exports = async function handler(req, res) {
       salary       ? `SALARIO PRETENDIDO: ${salary}`   : '',
       availability ? `DISPONIBILIDAD: ${availability}` : '',
     ].filter(Boolean).join('\n');
+
+    // Cultural tags — empresa + posición
+    const CULTURAL_LABELS = {
+      startup:'Startup', scaleup:'Scale-up', corpo:'Corporación', agencia:'Agencia', consultora:'Consultora',
+      move_fast:'Move fast', iterativo:'Iterativo', procesos_largos:'Procesos largos', waterfall:'Waterfall',
+      autonomia:'Autonomía', consenso:'Consenso', verticalista:'Verticalista', agil:'Ágil',
+      ownership:'Ownership', ejecutor:'Ejecutor', generalista:'Generalista', especialista:'Especialista',
+      hands_on:'Hands-on', estrategico:'Estratégico',
+      remoto_first:'Remoto-first', presencial:'Presencial', hibrido:'Híbrido', async_first:'Async-first', reunion_heavy:'Reunión-heavy',
+      feedback_directo:'Feedback directo', jerarquico:'Jerárquico', flat:'Flat', data_driven:'Data-driven', people_first:'People-first',
+    };
+    let clientTags = [];
+    let posTags = [];
+    try { clientTags = JSON.parse(culturalTagsRaw || '[]'); } catch(e) { clientTags = []; }
+    try { posTags = JSON.parse(posCulturalTagsRaw || '[]'); } catch(e) { posTags = []; }
+    const allCulturalTags = [...new Set([...clientTags, ...posTags])];
+    const culturalTagsStr = allCulturalTags.map(t => CULTURAL_LABELS[t] || t).join(', ');
+    const hasCultura = allCulturalTags.length > 0 || culturalComment;
+    const culturaBlock = hasCultura ? [
+      culturalTagsStr ? `ETIQUETAS CULTURALES DE LA EMPRESA/POSICIÓN: ${culturalTagsStr}` : '',
+      culturalComment ? `DESCRIPCIÓN CULTURAL (escrita por el cliente): ${culturalComment}` : '',
+    ].filter(Boolean).join('\n') : '';
     const otherDocsBlock = otherSections.length ? `\nDOCUMENTOS ADICIONALES:\n${otherSections.join('\n---\n')}\n` : '';
 
     const prompt = `Sos un recruiter senior con más de 10 años de experiencia trabajando con empresas y candidatos de todo el mundo, en industrias que van desde tecnología, finanzas, salud, consumo masivo, industria, educación, retail, medios, logística y cualquier otro sector. Trabajás con posiciones de todos los niveles, desde junior hasta C-level, y con perfiles técnicos y no técnicos por igual.
@@ -232,6 +257,11 @@ ${position ? `POSICIÓN: ${position}` : ''}
 ${logisticBlock ? `DATOS LOGÍSTICOS DEL CANDIDATO (ya confirmados con él):
 ${logisticBlock}` : ''}
 
+${culturaBlock ? `5. CULTURA DE LA EMPRESA Y POSICIÓN — usá esto para evaluar el fit cultural:
+---
+${culturaBlock}
+---` : ''}
+
 INSTRUCCIONES CRÍTICAS:
 
 FIT TÉCNICO — calculá el puntaje del 1 al 10 sumando estos 4 criterios contra la JD (o el rol si no hay JD):
@@ -254,11 +284,12 @@ FIT TÉCNICO — calculá el puntaje del 1 al 10 sumando estos 4 criterios contr
 - snapshot.exp: síntesis de la experiencia total en 4-6 palabras. Ej: "8 años en finanzas corporativas", "5 años en desarrollo backend".
 - storytelling: 4 a 6 líneas que solo pueden aplicar a ESTA persona. Si hay notas de entrevista, usá frases o conceptos que el candidato mencionó. Escribís como un recruiter que realmente conoce al candidato y entiende el negocio del cliente. PROHIBIDO usar frases genéricas como "sólida trayectoria", "perfil versátil", "orientado a resultados", "gran potencial", "excelente comunicador". Si el perfil no es bueno para el rol, decilo con claridad y sin vueltas — el hiring manager lo agradece más que el suavizado.
 - gap: 2 a 3 gaps REALES y ESPECÍFICOS entre este candidato y esta posición. No inventes gaps pero tampoco los suavices. Sé directo: el hiring manager necesita saber qué le falta, no que "podría mejorar en algunas áreas".
+- fitCultural: SOLO si hay etiquetas culturales (${hasCultura ? 'SÍ HAY' : 'NO HAY'}). ${hasCultura ? `Basándote en las etiquetas culturales (${culturalTagsStr}) y la descripción cultural del cliente, escribí 3 a 5 líneas explicando por qué este candidato encaja o no encaja culturalmente. Usá evidencia concreta del CV y de las notas de entrevista — no repitas las etiquetas literalmente, interpretá qué implican para este candidato específico. Si no hay evidencia suficiente, decí "No hay suficiente información para evaluar fit cultural" en lugar de inventar.` : 'Dejá este campo como string vacío: ""'}
 - analisis: 4 a 8 líneas de análisis profundo para el hiring manager. Explicá el techFit con fundamento real, qué significan los gaps en contexto (¿son salvables o estructurales?), cuál es el riesgo real de contratar a esta persona, y una recomendación de acción concreta. Este análisis es lo más valioso del reporte — escribilo como un senior recruiter que conoce el negocio del cliente.
 - ${isEs ? 'Toda la respuesta en español.' : 'Everything in English.'}
 
 Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), con esta estructura exacta:
-{"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string","company":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","englishLevel":"string"},"fitCriteria":{"expRol":0,"stack":0,"seniority":0,"logros":0},"tools":[{"tool":"string","years":"string"}],"experience":[{"role":"string","company":"string","period":"string"}],"storytelling":"string","gap":[{"title":"string","detail":"string"}],"recommendation":"string","analisis":"string"}`;
+{"name":"string","role":"string","location":"string","modality":"string","personal":{"linkedin":"string","phone":"string","email":"string","salary":"string","availability":"string","company":"string"},"snapshot":{"techFit":"string","exp":"string","cult":"string","englishLevel":"string"},"fitCriteria":{"expRol":0,"stack":0,"seniority":0,"logros":0},"tools":[{"tool":"string","years":"string"}],"experience":[{"role":"string","company":"string","period":"string"}],"storytelling":"string","gap":[{"title":"string","detail":"string"}],"recommendation":"string","fitCultural":"string","analisis":"string"}`;
 
     // ── Llamada al proveedor de IA ──
     const raw = await callAI(prompt);
@@ -274,6 +305,11 @@ Respondé ÚNICAMENTE con JSON válido (sin markdown, sin bloques de código), c
     } catch(e) {
       console.error('JSON parse error. Raw length:', raw.length, 'First 500 chars:', raw.slice(0, 500));
       return res.status(500).json({ error: 'La IA devolvió una respuesta inválida. Intentá de nuevo.' });
+    }
+
+    // Inyectar culturalTags (labels legibles) en el parsed para que perfil.html los muestre
+    if (allCulturalTags.length > 0) {
+      parsed.culturalTags = allCulturalTags.map(t => CULTURAL_LABELS[t] || t);
     }
 
     res.status(200).json({
