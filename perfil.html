@@ -344,6 +344,7 @@ async function markViewed(token) {
         'Content-Type': 'application/json',
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'x-hwg-secret': '785e9f5676acdcf1463cadb4c6120e50804e6a551f0c2fa0dfa1f5e1ab5ffa51',
       },
       body: JSON.stringify({ viewed_at: new Date().toISOString() }),
     });
@@ -366,6 +367,7 @@ async function init() {
         headers: {
           'apikey': SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'x-hwg-secret': '785e9f5676acdcf1463cadb4c6120e50804e6a551f0c2fa0dfa1f5e1ab5ffa51',
         }
       }
     );
