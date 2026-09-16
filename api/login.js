@@ -5,6 +5,7 @@
 // clave anónima de Supabase.
 
 const bcrypt = require('bcryptjs');
+const { signSession } = require('./_auth');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -54,7 +55,8 @@ module.exports = async function handler(req, res) {
     }
 
     const { password: _omit, ...safeUser } = user;
-    return res.status(200).json(safeUser);
+    const token = signSession(safeUser);
+    return res.status(200).json({ ...safeUser, token });
   } catch (e) {
     console.error('login error:', e);
     return res.status(500).json({ error: e.message });
