@@ -55,7 +55,6 @@ module.exports = async function handler(req, res) {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Prefer': 'return=representation',
-        'x-hwg-secret': process.env.HWG_SECRET,
       },
       body: JSON.stringify(payload),
     });
