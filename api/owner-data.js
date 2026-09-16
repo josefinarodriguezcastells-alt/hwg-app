@@ -30,18 +30,23 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const session = requireRole(req, res, ['owner']);
+  const { table, ...rawParams } = req.query || {};
+  if (!table || !ALLOWED_TABLES.has(table)) {
+    return res.status(400).json({ error: 'Tabla no permitida' });
+  }
+
+  // Excepción puntual: cualquier recruiter puede crear (no leer/editar/borrar)
+  // un registro de billing al cerrar una contratación (ver HireModal en el
+  // ATS) — el resto de las tablas y operaciones siguen siendo solo owner.
+  const allowedRoles =
+    table === 'billing' && req.method === 'POST' ? ['owner', 'recruiter'] : ['owner'];
+  const session = requireRole(req, res, allowedRoles);
   if (!session) return;
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
-  }
-
-  const { table, ...rawParams } = req.query || {};
-  if (!table || !ALLOWED_TABLES.has(table)) {
-    return res.status(400).json({ error: 'Tabla no permitida' });
   }
 
   const params = new URLSearchParams();
