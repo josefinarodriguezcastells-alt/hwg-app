@@ -3,7 +3,8 @@
     { "source": "/perfil", "destination": "/perfil.html" }
   ],
   "functions": {
-    "api/generate.js": { "maxDuration": 60 },
+    "api/generate.js": { "maxDuration": 60, "includeFiles": "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs" },
+    "api/extract-text.js": { "includeFiles": "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs" },
     "api/extract-profile.js": { "maxDuration": 60 },
     "api/docx.js": { "maxDuration": 60 },
     "api/save-profile.js": { "maxDuration": 30 },
