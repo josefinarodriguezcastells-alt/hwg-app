@@ -43,6 +43,8 @@ module.exports = async function handler(req, res) {
       trajectory:   'Trayectoria profesional',
       tools:        'Stack técnico',
       whyFit:       'Por qué es fit para este rol',
+      analisis:     'Análisis para el cliente',
+      fitCultural:  'Fit cultural',
       gap:          'Puntos de atención',
       scorecard:    'Scorecard de entrevista',
       linkedin:     'LinkedIn',
@@ -63,6 +65,8 @@ module.exports = async function handler(req, res) {
       trajectory:   'Professional background',
       tools:        'Tech stack',
       whyFit:       'Why this candidate fits',
+      analisis:     'Analysis for the client',
+      fitCultural:  'Culture fit analysis',
       gap:          'Points of attention',
       scorecard:    'Interview scorecard',
       linkedin:     'LinkedIn',
@@ -310,6 +314,33 @@ module.exports = async function handler(req, res) {
       }),
     ];
 
+    // ── ANÁLISIS PARA EL CLIENTE ────────────────────────────────────────────────
+    // Antes se generaba pero nunca llegaba al Word (solo al link web) —
+    // el propio prompt de generación lo describe como "lo más valioso del
+    // reporte", así que se agrega acá.
+    const analisisSection = data.analisis ? [
+      sectionHead(L.analisis),
+      new Paragraph({
+        spacing: sp(60, 240),
+        border: { left: { style: BorderStyle.SINGLE, size: 24, color: VIOLET } },
+        shading: { fill: VIOLET_LIGHT, type: ShadingType.CLEAR },
+        indent: { left: 160 },
+        children: [txt(data.analisis, { size: 21, color: TEXT_MUTED })]
+      }),
+    ] : [];
+
+    // ── FIT CULTURAL ─────────────────────────────────────────────────────────
+    const fitCulturalSection = data.fitCultural ? [
+      sectionHead(L.fitCultural),
+      new Paragraph({
+        spacing: sp(60, 240),
+        border: { left: { style: BorderStyle.SINGLE, size: 24, color: AMBER } },
+        shading: { fill: AMBER_LIGHT, type: ShadingType.CLEAR },
+        indent: { left: 160 },
+        children: [txt(data.fitCultural, { size: 21, color: TEXT_MUTED })]
+      }),
+    ] : [];
+
     // ── SCORECARD ─────────────────────────────────────────────────────────────
     const scData = data.scorecard;
     const scorecardSection = scData && scData.items && scData.items.length > 0 ? [
@@ -448,6 +479,8 @@ module.exports = async function handler(req, res) {
           ...trajectorySection,
           ...toolsSection,
           ...whySection,
+          ...analisisSection,
+          ...fitCulturalSection,
           ...scorecardSection,
           ...gapSection,
           footerTable,
