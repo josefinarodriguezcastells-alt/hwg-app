@@ -21,8 +21,9 @@ module.exports = async function handler(req, res) {
     let text = '';
 
     if (ext === '.pdf') {
-      const pdfParse = require('pdf-parse');
-      const data = await pdfParse(buffer);
+      const { PDFParse } = require('pdf-parse');
+      const parser = new PDFParse({ data: buffer });
+      const data = await parser.getText();
       text = data.text || '';
     } else if (ext === '.docx') {
       const mammoth = require('mammoth');

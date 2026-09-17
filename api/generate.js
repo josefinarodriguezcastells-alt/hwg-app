@@ -113,8 +113,9 @@ module.exports = async function handler(req, res) {
       const ext = path.extname(file.originalFilename || '').toLowerCase();
       try {
         if (ext === '.pdf') {
-          const pdfParse = require('pdf-parse');
-          return (await pdfParse(fs.readFileSync(filePath))).text || '';
+          const { PDFParse } = require('pdf-parse');
+          const parser = new PDFParse({ data: fs.readFileSync(filePath) });
+          return (await parser.getText()).text || '';
         } else if (ext === '.docx' || ext === '.doc') {
           const mammoth = require('mammoth');
           return (await mammoth.extractRawText({ path: filePath })).value || '';
@@ -132,8 +133,9 @@ module.exports = async function handler(req, res) {
         const buffer = Buffer.from(await response.arrayBuffer());
         const ext = url.split('?')[0].split('.').pop().toLowerCase();
         if (ext === 'pdf') {
-          const pdfParse = require('pdf-parse');
-          return (await pdfParse(buffer)).text || '';
+          const { PDFParse } = require('pdf-parse');
+          const parser = new PDFParse({ data: buffer });
+          return (await parser.getText()).text || '';
         } else if (ext === 'docx' || ext === 'doc') {
           const mammoth = require('mammoth');
           return (await mammoth.extractRawText({ buffer })).value || '';
