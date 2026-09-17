@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { cvBase64, cvMediaType, candidateName, positionRole, positionClient, preguntas } = req.body;
+    const { cvBase64, cvMediaType, candidateName, positionRole, positionClient, preguntas, transcripcion } = req.body;
 
     const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
     if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada' });
@@ -20,7 +20,13 @@ export default async function handler(req, res) {
       `${i + 1}. [${p.id}] ${p.label} (tipo: ${p.tipo}${p.opciones ? ', opciones: ' + p.opciones.join('/') : ''})`
     ).join('\n');
 
-    const systemPrompt = `Sos un asistente de recruiting. Tu tarea es analizar el CV de un candidato y pre-completar un scorecard de entrevista.
+    const tieneTranscripcion = !!(transcripcion && transcripcion.trim());
+
+    const systemPrompt = `Sos un asistente de recruiting. Tu tarea es analizar la información disponible de un candidato y pre-completar un scorecard de entrevista.
+
+${tieneTranscripcion
+  ? 'FUENTE PRINCIPAL: la transcripción/notas de la entrevista — reflejá lo que el candidato realmente dijo y cómo se desempeñó, no solo lo que figura en el CV. El CV es contexto de trayectoria; la entrevista es la fuente de verdad sobre esta persona hoy.'
+  : 'No hay entrevista todavía — completá en base al CV únicamente, y para las preguntas que dependen de haber hablado con el candidato (impresión personal, comunicación, etc.) dejá la respuesta vacía en vez de inventar.'}
 
 Devolvé ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
 {
@@ -37,7 +43,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
 Para las respuestas:
 - tipo "si_no": responde "si", "no" o "" si no podés determinarlo
 - tipo "escala": responde número del 1 al 5 como string, o "" si no podés determinarlo  
-- tipo "texto": responde con texto basado en el CV, o "" si no aplica
+- tipo "texto": responde con texto basado en la entrevista (si hay) o el CV, o "" si no aplica
 - tipo "opciones": responde con una de las opciones disponibles, o "" si no podés determinarlo
 
 Para fit_cultural_pills, usá solo estos ids si aplican:
@@ -51,7 +57,7 @@ No incluyas explicaciones, solo el JSON.`;
     const userContent = [
       {
         type: 'text',
-        text: `Candidato: ${candidateName}\nPosición: ${positionRole} en ${positionClient}\n\nPreguntas del scorecard:\n${preguntasStr}\n\nAnalizá el CV adjunto y pre-completá el scorecard.`
+        text: `Candidato: ${candidateName}\nPosición: ${positionRole} en ${positionClient}\n${tieneTranscripcion ? `\nTRANSCRIPCIÓN / NOTAS DE LA ENTREVISTA:\n---\n${transcripcion.slice(0, 6000)}\n---\n` : ''}\nPreguntas del scorecard:\n${preguntasStr}\n\nAnalizá toda la información disponible (${tieneTranscripcion ? 'entrevista y CV adjunto' : 'CV adjunto'}) y pre-completá el scorecard.`
       }
     ];
 
