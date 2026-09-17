@@ -10,7 +10,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const form = formidable({ maxFileSize: 10 * 1024 * 1024 });
+    const form = new formidable.IncomingForm({ maxFileSize: 10 * 1024 * 1024 });
     const [, files] = await form.parse(req);
     const file = Array.isArray(files.file) ? files.file[0] : files.file;
     if (!file) return res.status(400).json({ error: 'No file provided' });
