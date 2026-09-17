@@ -1,6 +1,7 @@
 const formidable = require('formidable');
 const fs = require('fs');
 const path = require('path');
+const { extractPdfText } = require('./_pdf-text');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,10 +22,7 @@ module.exports = async function handler(req, res) {
     let text = '';
 
     if (ext === '.pdf') {
-      const { PDFParse } = require('pdf-parse');
-      const parser = new PDFParse({ data: buffer });
-      const data = await parser.getText();
-      text = data.text || '';
+      text = await extractPdfText(buffer);
     } else if (ext === '.docx') {
       const mammoth = require('mammoth');
       const result = await mammoth.extractRawText({ buffer });
