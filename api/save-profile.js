@@ -19,6 +19,13 @@ module.exports = async function handler(req, res) {
     if (!profile_data) {
       return res.status(400).json({ error: 'profile_data es requerido' });
     }
+    // Sin position_id el informe queda huérfano: invisible en la pestaña
+    // Informe del candidato y en el portal del cliente (los dos filtran por
+    // posición), aunque exista en la base. Mejor cortar acá con un error
+    // claro que dejar una fila fantasma que nadie va a encontrar después.
+    if (!candidate_id || !position_id) {
+      return res.status(400).json({ error: 'candidate_id y position_id son requeridos para publicar un informe' });
+    }
 
     // Token único legible: nombre-empresa-hash corto
     const name = (profile_data.name || 'candidato')
