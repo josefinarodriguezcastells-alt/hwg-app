@@ -107,6 +107,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: 'HWG ATS <notificaciones@hwgtalent.com>',
         to: toAddresses,
+        reply_to: 'josie@hwgtalent.com',
         subject: `[HWG] Nuevo pedido — ${clientName || 'Cliente'}: ${title}`,
         html,
       }),
