@@ -63,7 +63,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'HWG ATS <onboarding@resend.dev>',
+        from: 'HWG ATS <notificaciones@hwgtalent.com>',
         to: toAddresses,
         reply_to: fromEmail,
         subject: `[Portal] Mensaje de ${clientName || 'un cliente'}${recruiterName ? ' para ' + recruiterName : ''}`,
