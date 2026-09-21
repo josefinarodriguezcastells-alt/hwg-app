@@ -6,7 +6,13 @@ const jwt = require('jsonwebtoken');
 
 function signSession(user) {
   const secret = process.env.SESSION_SECRET;
-  return jwt.sign({ id: user.id, email: user.email, role: user.role }, secret, { expiresIn: '12h' });
+  // 365 días, no 12hs: el frontend guarda esto en localStorage y nunca lo
+  // refresca ni chequea vencimiento — una recruiter que deja la pestaña
+  // abierta de un día para el otro (lo normal acá) se quedaba sin sesión
+  // válida justo para el endpoint protegido de Finanzas, mientras el
+  // resto de la app seguía andando con la clave anónima. Encontrado
+  // cuando un hire confirmado no generó la línea de facturación.
+  return jwt.sign({ id: user.id, email: user.email, role: user.role }, secret, { expiresIn: '365d' });
 }
 
 // Verifica el JWT y chequea que el rol esté en allowedRoles.
