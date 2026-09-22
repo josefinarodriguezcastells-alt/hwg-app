@@ -22,6 +22,15 @@ module.exports = async function handler(req, res) {
   if (!portal_token) return res.status(400).json({ error: 'Falta portal_token' });
   if (!Array.isArray(candidate_ids) || candidate_ids.length === 0) return res.status(200).json([]);
 
+  // Los ids van directo a una URL armada a mano más abajo — se validan acá
+  // como UUID antes de tocar nada, así un caller no puede meter un '#' (u
+  // otro caracter con significado en una URL) en un candidate_id para que
+  // el parser corte la query antes del filtro por position_id y se cuelen
+  // presentaciones de otro cliente (encontrado por Greptile).
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const safeCandidateIds = candidate_ids.filter(id => typeof id === 'string' && UUID_RE.test(id));
+  if (safeCandidateIds.length === 0) return res.status(200).json([]);
+
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
@@ -35,6 +44,7 @@ module.exports = async function handler(req, res) {
       { headers: baseHeaders }
     );
     const clientRows = await clientResp.json();
+    if (!clientResp.ok) return res.status(clientResp.status).json({ error: clientRows });
     const client = Array.isArray(clientRows) ? clientRows[0] : null;
     if (!client) return res.status(403).json({ error: 'Portal inválido' });
 
@@ -43,11 +53,14 @@ module.exports = async function handler(req, res) {
       { headers: baseHeaders }
     );
     const positions = await posResp.json();
+    if (!posResp.ok) return res.status(posResp.status).json({ error: positions });
+    // positions.id ya son uuid propios de la base (no vienen del caller),
+    // no necesitan la misma validación que candidate_ids.
     const posIds = (positions || []).map(p => p.id);
     if (posIds.length === 0) return res.status(200).json([]);
 
-    const candFilter = candidate_ids.map(id => `"${id}"`).join(',');
-    const posFilter = posIds.map(id => `"${id}"`).join(',');
+    const candFilter = safeCandidateIds.join(',');
+    const posFilter = posIds.join(',');
     const presResp = await fetch(
       `${SUPABASE_URL}/rest/v1/candidate_presentations?candidate_id=in.(${candFilter})&position_id=in.(${posFilter})&select=candidate_id,position_id,token,published_at&order=published_at.desc`,
       { headers: baseHeaders }
