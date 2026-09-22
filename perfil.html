@@ -338,15 +338,8 @@ function renderProfile(p) {
 
 async function markViewed(token) {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?token=eq.${token}`, {
+    await fetch(`https://hwg-app.vercel.app/api/presentation?token=${encodeURIComponent(token)}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'x-hwg-secret': '785e9f5676acdcf1463cadb4c6120e50804e6a551f0c2fa0dfa1f5e1ab5ffa51',
-      },
-      body: JSON.stringify({ viewed_at: new Date().toISOString() }),
     });
   } catch(e) { /* silencioso */ }
 }
@@ -361,22 +354,17 @@ async function init() {
   }
 
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/candidate_presentations?token=eq.${encodeURIComponent(token)}&select=*`,
-      {
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'x-hwg-secret': '785e9f5676acdcf1463cadb4c6120e50804e6a551f0c2fa0dfa1f5e1ab5ffa51',
-        }
-      }
-    );
-    const rows = await res.json();
-    if (!rows || rows.length === 0) {
+    // Vía el backend (service key, nunca expuesta acá) en vez de pegarle
+    // directo a Supabase con la clave anónima — antes esta página traía
+    // además un "secreto" hardcodeado en el HTML, visible con Ver código
+    // fuente, así que nunca fue realmente secreto (hallazgo de seguridad
+    // 2026-09-22, ver AGENTS.md).
+    const res = await fetch(`https://hwg-app.vercel.app/api/presentation?token=${encodeURIComponent(token)}`);
+    if (!res.ok) {
       document.getElementById('app').innerHTML = '<div class="state-box">Perfil no encontrado o link expirado.</div>';
       return;
     }
-    const presentation = rows[0];
+    const presentation = await res.json();
     renderProfile(presentation);
     markViewed(token);
   } catch(e) {
