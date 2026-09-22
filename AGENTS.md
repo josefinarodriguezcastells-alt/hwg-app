@@ -28,7 +28,23 @@ This file governs work in this repo (`hwg-app`, the candidate-facing app).
      the actual endpoint — with `curl` for API behavior (this is the
      established way to verify auth/permission fixes in this repo, e.g. the
      `users` table lockdown was confirmed with a raw `curl -X DELETE`) or a
-     browser for `index.html`/`perfil.html` flows — against real data.
+     browser for `index.html`/`perfil.html` flows — against real data, since
+     there's no seed/fixture database.
+   - **Production-data safeguard (required, not optional):** "against real
+     data" means read-only by default. A `curl` that verifies an
+     auth/permission fix should hit a GET, or a mutating method with a
+     bogus/expired token expected to be rejected (the `users` DELETE
+     precedent) — never a `curl` that actually succeeds in writing,
+     updating, or deleting a real row, unless the person running it has
+     explicitly said to and understands a real record will change. Endpoints
+     that write through `api/owner-data.js` (POST/PATCH/DELETE) or publish
+     through `api/save-profile.js` are exactly the ones this applies to.
+     Same for browser flows: a UI test that would submit a real form,
+     confirm a hire, or publish a profile needs either an explicit go-ahead
+     to mutate a real record, or a write-guard (intercept `window.fetch` in
+     the page for mutating methods and return a mocked success instead of
+     letting it hit Supabase/the API) so the flow can be verified without
+     touching production data.
 4. **Ship — `/before-and-after`, then `/greploop`.** Open the PR with
    before/after proof embedded in the description (a `curl` request/response
    pair counts as evidence when there's no visible UI surface). Run
