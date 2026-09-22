@@ -43,14 +43,20 @@ This file governs work in this repo (`hwg-app`, the candidate-facing app).
      confirm a hire, or publish a profile needs either an explicit go-ahead
      to mutate a real record, or a write-guard (intercept `window.fetch` in
      the page for mutating methods and return a mocked success instead of
-     letting it hit the API) so the flow can be verified without touching
-     production data — this repo's frontend (`index.html`/`perfil.html`)
-     talks to `/api/*` with plain `fetch()`, not the `@supabase/supabase-js`
-     client, so a `window.fetch` override reliably catches all of it even
-     installed after the page loads. (Not true in `hwg_ats`, which does use
-     that client library in the browser and needs a different approach —
-     see its own `AGENTS.md` before assuming this trick transfers.)
-     touching production data.
+     letting it hit the API). This repo's frontend uses plain `fetch()`,
+     not the `@supabase/supabase-js` client (unlike `hwg_ats` — see its own
+     `AGENTS.md`, the two need different approaches), so a `window.fetch`
+     override does catch the request mechanically. **That is not enough on
+     its own**, though: `perfil.html` calls `markViewed()` automatically on
+     page load — a plain `fetch()` PATCH straight to the Supabase REST API
+     (`candidate_presentations`, sets `viewed_at`), no user action required
+     — and it fires before an agent driving a browser gets a chance to
+     inject any override at all. Simply loading a real candidate's
+     `perfil.html` link, guard installed or not, already mutates that row.
+     For this specific page, don't navigate to a real token's perfil link
+     during verification at all (use a throwaway/test presentation row, or
+     just read the code path) unless marking it "viewed" is an accepted,
+     explicitly agreed side effect.
 4. **Ship — `/before-and-after`, then `/greploop`.** Open the PR with
    before/after proof embedded in the description (a `curl` request/response
    pair counts as evidence when there's no visible UI surface). Run
