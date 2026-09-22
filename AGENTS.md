@@ -43,7 +43,13 @@ This file governs work in this repo (`hwg-app`, the candidate-facing app).
      confirm a hire, or publish a profile needs either an explicit go-ahead
      to mutate a real record, or a write-guard (intercept `window.fetch` in
      the page for mutating methods and return a mocked success instead of
-     letting it hit Supabase/the API) so the flow can be verified without
+     letting it hit the API) so the flow can be verified without touching
+     production data — this repo's frontend (`index.html`/`perfil.html`)
+     talks to `/api/*` with plain `fetch()`, not the `@supabase/supabase-js`
+     client, so a `window.fetch` override reliably catches all of it even
+     installed after the page loads. (Not true in `hwg_ats`, which does use
+     that client library in the browser and needs a different approach —
+     see its own `AGENTS.md` before assuming this trick transfers.)
      touching production data.
 4. **Ship — `/before-and-after`, then `/greploop`.** Open the PR with
    before/after proof embedded in the description (a `curl` request/response
