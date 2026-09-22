@@ -1,16 +1,25 @@
 // api/owner-data.js
 // Proxy genérico y protegido hacia Supabase para las tablas que hoy se leen
 // y escriben directo desde el browser con la clave anónima: billing, facturas,
-// embedded_nomina_personas, embedded_nomina, entidades_facturadoras, users.
+// embedded_nomina_personas, embedded_nomina, entidades_facturadoras, users,
+// más (2026-09-22, hallazgo de seguridad de Supabase) candidate_presentations,
+// outreach_sequences, outreach_sequence_steps, word_download_log — estas 4
+// últimas ya tenían RLS deshabilitado y quedaban 100% públicas con solo la
+// clave anónima (visible en el bundle del frontend): cualquiera podía leer,
+// editar o borrar informes de candidatos y secuencias de outreach de
+// cualquier cliente, sin pasar por el login de la app.
 //
-// Requiere un JWT válido con rol 'owner' (ver _auth.js). Usa la service key
-// de Supabase server-side — la clave anónima ya no necesita (ni debería tener)
-// acceso a estas tablas una vez que se aplique el RLS lockdown.
+// Requiere un JWT válido (ver _auth.js) — 'owner' para las primeras 6 tablas
+// (con la excepción puntual de billing+POST), 'owner' o 'recruiter' para las
+// últimas 4 (son de uso rutinario de cualquier recruiter, no solo del owner).
+// Usa la service key de Supabase server-side, que ignora RLS siempre — la
+// clave anónima ya no necesita (ni debería tener) acceso directo a estas
+// tablas una vez que se aplique el RLS lockdown (ver migrations/).
 //
 // El querystring que manda el cliente (select/order/limit/filtros eq/not, etc.)
 // se reenvía tal cual a PostgREST — es exactamente lo que supabase-js arma
-// internamente, así que el shim del frontend (secureTable en index.html) puede
-// mantener la misma sintaxis de encadenado que ya se usaba.
+// internamente, así que el shim del frontend (secureTable en lib/supabase.js)
+// puede mantener la misma sintaxis de encadenado que ya se usaba.
 
 const bcrypt = require('bcryptjs');
 const { requireRole } = require('./_auth');
@@ -22,6 +31,20 @@ const ALLOWED_TABLES = new Set([
   'embedded_nomina',
   'entidades_facturadoras',
   'users',
+  'candidate_presentations',
+  'outreach_sequences',
+  'outreach_sequence_steps',
+  'word_download_log',
+]);
+
+// Tablas de uso rutinario de cualquier recruiter (no solo owner) — a
+// diferencia de billing/facturas/nómina/usuarios, que siguen siendo
+// exclusivas del owner.
+const RECRUITER_TABLES = new Set([
+  'candidate_presentations',
+  'outreach_sequences',
+  'outreach_sequence_steps',
+  'word_download_log',
 ]);
 
 module.exports = async function handler(req, res) {
@@ -37,9 +60,12 @@ module.exports = async function handler(req, res) {
 
   // Excepción puntual: cualquier recruiter puede crear (no leer/editar/borrar)
   // un registro de billing al cerrar una contratación (ver HireModal en el
-  // ATS) — el resto de las tablas y operaciones siguen siendo solo owner.
+  // ATS). Las tablas en RECRUITER_TABLES son de uso diario de cualquier
+  // recruiter en todas las operaciones. El resto sigue siendo solo owner.
   const allowedRoles =
-    table === 'billing' && req.method === 'POST' ? ['owner', 'recruiter'] : ['owner'];
+    table === 'billing' && req.method === 'POST' ? ['owner', 'recruiter']
+    : RECRUITER_TABLES.has(table) ? ['owner', 'recruiter']
+    : ['owner'];
   const session = requireRole(req, res, allowedRoles);
   if (!session) return;
 
