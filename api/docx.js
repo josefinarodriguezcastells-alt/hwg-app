@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { data, lang } = req.body;
+    const { data, lang, recruiterName } = req.body;
     const isEs = lang === 'es';
     const today = new Date().toLocaleDateString(isEs ? 'es-AR' : 'en-US', {day:'2-digit', month:'long', year:'numeric'});
 
@@ -491,6 +491,12 @@ module.exports = async function handler(req, res) {
     const buffer = await Packer.toBuffer(doc);
 
     // ── Email notification ────────────────────────────────────────────────────
+    // Aviso interno de "se generó un Word" — nunca le llega al cliente (solo
+    // a GMAIL_USER, la casilla interna de HWG). Antes mandaba el .docx
+    // adjunto, que Gmail renderiza como una vista previa de Word fea dentro
+    // del mail ("se ve horrible" — reportado por Jo con casos reales:
+    // Sheila Martinez, Matías Lamela). Ahora manda un link a el ATS en vez
+    // del archivo, y suma quién lo generó.
     try {
       const nodemailer = require('nodemailer');
       const transporter = nodemailer.createTransport({
@@ -515,15 +521,14 @@ module.exports = async function handler(req, res) {
                 <tr><td style="padding:8px 0;font-weight:700;">Rol</td><td>${data.role || '—'}</td></tr>
                 ${data.personal?.position ? `<tr><td style="padding:8px 0;font-weight:700;">Posición</td><td>${data.personal.position}</td></tr>` : ''}
                 ${data.recommendation ? `<tr><td style="padding:8px 0;font-weight:700;">Recomendación</td><td>${data.recommendation}</td></tr>` : ''}
+                <tr><td style="padding:8px 0;font-weight:700;">Generado por</td><td>${recruiterName || '—'}</td></tr>
                 <tr><td style="padding:8px 0;font-weight:700;">Fecha</td><td>${today}</td></tr>
               </table>
+              <div style="margin-top:24px;">
+                <a href="https://hwgats.vercel.app" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:600;">Ver en el ATS →</a>
+              </div>
             </div>
           </div>`,
-        attachments: [{
-          filename: `${(data.name || 'candidato').replace(/\s+/g, '_')}_HWG.docx`,
-          content: buffer,
-          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        }]
       });
     } catch(mailErr) {
       console.error('Mail error:', mailErr.message);
