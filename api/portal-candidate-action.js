@@ -193,13 +193,22 @@ module.exports = async function handler(req, res) {
     // ya muestra "—" para ese caso en el ATS; el motivo/rejection_quien
     // ('cliente') es lo que realmente distingue este cambio en las vistas
     // que ya existen (CandidatesPage, PositionDetail).
-    const histResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/status_history`,
-      { method: 'POST', headers: { ...baseHeaders, Prefer: 'return=minimal' }, body: JSON.stringify([{ application_id, old_status: oldStatus, new_status: newStatus, changed_by: null }]) }
-    );
-    if (!histResp.ok) {
-      const errBody = await histResp.json().catch(() => ({}));
-      console.error('portal-candidate-action: status_history insert failed', errBody);
+    // 'entrevista_cliente_fit' es a la vez estado de origen permitido y
+    // destino de 'schedule' — pedir Agendar de nuevo mientras ya se está en
+    // ese estado es un no-op de estado real, así que no insertamos una
+    // entrada de historial "sin transición" (hallazgo de Greptile); la nota
+    // con la nueva disponibilidad y el mail al recruiter sí se mandan, son
+    // información nueva aunque el estado no haya cambiado.
+    let histResp = { ok: true };
+    if (oldStatus !== newStatus) {
+      histResp = await fetch(
+        `${SUPABASE_URL}/rest/v1/status_history`,
+        { method: 'POST', headers: { ...baseHeaders, Prefer: 'return=minimal' }, body: JSON.stringify([{ application_id, old_status: oldStatus, new_status: newStatus, changed_by: null }]) }
+      );
+      if (!histResp.ok) {
+        const errBody = await histResp.json().catch(() => ({}));
+        console.error('portal-candidate-action: status_history insert failed', errBody);
+      }
     }
 
     const noteVerdict = action === 'reject' ? 'rechazo' : 'agenda_solicitada';
@@ -219,10 +228,20 @@ module.exports = async function handler(req, res) {
     if (!histResp.ok || !noteResp.ok) {
       const rollbackPayload = { status: oldStatus, last_updated: now };
       if (action === 'reject') { rollbackPayload.rejection_quien = null; rollbackPayload.rejection_motivo = null; }
-      await fetch(
-        `${SUPABASE_URL}/rest/v1/applications?id=eq.${application_id}`,
-        { method: 'PATCH', headers: { ...baseHeaders, Prefer: 'return=minimal' }, body: JSON.stringify(rollbackPayload) }
-      ).catch(e => console.error('portal-candidate-action: rollback failed', e));
+      // Condicional a newStatus, igual que el update original: si otro
+      // request (o el recruiter) ya movió la postulación de nuevo desde que
+      // la pusimos en newStatus, este rollback no debe pisar esa transición
+      // más nueva con el oldStatus viejo (hallazgo de Greptile).
+      const rollbackResp = await fetch(
+        `${SUPABASE_URL}/rest/v1/applications?id=eq.${application_id}&status=eq.${encodeURIComponent(newStatus)}`,
+        { method: 'PATCH', headers: { ...baseHeaders, Prefer: 'return=representation' }, body: JSON.stringify(rollbackPayload) }
+      ).catch(e => { console.error('portal-candidate-action: rollback failed', e); return null; });
+      if (rollbackResp) {
+        const rollbackRows = await rollbackResp.json().catch(() => null);
+        if (!rollbackResp.ok || !Array.isArray(rollbackRows) || rollbackRows.length === 0) {
+          console.error('portal-candidate-action: rollback did not apply (status moved on since)', { ok: rollbackResp.ok, rollbackRows });
+        }
+      }
       return res.status(500).json({ error: 'No se pudo completar la acción, intentá de nuevo' });
     }
 
