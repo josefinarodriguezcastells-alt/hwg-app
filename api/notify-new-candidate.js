@@ -16,7 +16,8 @@ const COPY = {
     body: (candidateName, positionRole) =>
       `Tenemos un nuevo candidato para tu revisión: <strong>${candidateName}</strong>, para la búsqueda de <strong>${positionRole}</strong>.`,
     salaryLabel: 'Salario pretendido',
-    cta: 'Ver candidato →',
+    cta: 'Ver informe completo →',
+    portalCta: 'Ir a tu portal →',
     closing: 'Aguardamos tus comentarios.',
     signoff: 'Saludos,<br/>HWG Team',
     footer: 'HWG Talent Consultants · Notificación automática desde el portal de clientes',
@@ -29,7 +30,8 @@ const COPY = {
     body: (candidateName, positionRole) =>
       `We have a new candidate for your review: <strong>${candidateName}</strong>, for the <strong>${positionRole}</strong> search.`,
     salaryLabel: 'Expected salary',
-    cta: 'View candidate →',
+    cta: 'View full report →',
+    portalCta: 'Go to your portal →',
     closing: "We're looking forward to your feedback.",
     signoff: 'Best,<br/>HWG Team',
     footer: 'HWG Talent Consultants · Automatic notification from the client portal',
@@ -55,6 +57,7 @@ export default async function handler(req, res) {
       positionRole,
       clientName,
       salaryExpected,     // opcional
+      informeUrl,         // link directo al informe publicado del candidato
       portalUrl,          // link al portal del cliente
       recruiterEmail,     // reply-to
       lang,               // 'es' | 'en', elegido por el recruiter
@@ -96,12 +99,16 @@ export default async function handler(req, res) {
 
       ${salarySection}
 
-      <div style="text-align:center;margin-bottom:8px;">
-        <a href="${portalUrl}"
+      <div style="text-align:center;margin-bottom:${informeUrl ? '10px' : '8px'};">
+        <a href="${informeUrl || portalUrl}"
            style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
           ${t.cta}
         </a>
       </div>
+      ${informeUrl ? `
+      <div style="text-align:center;margin-bottom:8px;">
+        <a href="${portalUrl}" style="color:#7c3aed;font-size:12px;text-decoration:none;">${t.portalCta}</a>
+      </div>` : ''}
 
       <p style="margin:24px 0 0;font-size:14px;color:#111827;line-height:1.6;">${t.closing}</p>
       <p style="margin:16px 0 0;font-size:14px;color:#111827;line-height:1.6;">${t.signoff}</p>
