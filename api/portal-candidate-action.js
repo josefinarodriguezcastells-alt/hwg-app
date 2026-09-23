@@ -15,6 +15,17 @@
 
 const REJECTED_STATUS = 'rechazado';
 const SCHEDULE_STATUS = 'entrevista_cliente_fit';
+// Solo se puede Rechazar/Agendar mientras la postulación está esperando una
+// decisión del cliente — mismo set que usa el portal para mostrar los
+// botones (WAITING_ON_CLIENT_STATUSES en ClientPortal.jsx). Sin este check
+// un request repetido o una carrera con un cambio de estado del recruiter
+// podía pisar un estado más avanzado (ej. 'offer') con 'rechazado'
+// (hallazgo de Greptile).
+const ALLOWED_SOURCE_STATUSES = ['submitted', 'entrevista_cliente_fit', 'entrevista_cliente_tech', 'entrevista_cliente_cultura'];
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 const COPY = {
   es: {
@@ -60,6 +71,15 @@ const COPY = {
 function buildEmailHtml(t, action, candidateName, positionRole, clientName, detailText, ctaUrl) {
   const c = t[action];
   const color = action === 'reject' ? '#dc2626' : '#7c3aed';
+  // Todo lo que viene del cliente (detailText) o de datos guardados
+  // (nombres) se escapa antes de ir al HTML del mail — un portal_token
+  // activo alcanza para escribir el "motivo"/"disponibilidad", y ese mail
+  // sale con la marca oficial de HWG a la bandeja del recruiter (hallazgo
+  // de seguridad de Greptile).
+  candidateName = escapeHtml(candidateName);
+  positionRole = escapeHtml(positionRole);
+  clientName = escapeHtml(clientName);
+  detailText = escapeHtml(detailText);
   return `
 <!DOCTYPE html>
 <html>
@@ -131,6 +151,9 @@ module.exports = async function handler(req, res) {
     if (!app || app.positions?.client_id !== client.id) {
       return res.status(403).json({ error: 'Postulación inválida' });
     }
+    if (!ALLOWED_SOURCE_STATUSES.includes(app.status)) {
+      return res.status(409).json({ error: 'Esta postulación ya no está en un estado que permita esta acción' });
+    }
 
     const candResp = await fetch(
       `${SUPABASE_URL}/rest/v1/candidates?id=eq.${app.candidate_id}&select=name`,
@@ -148,13 +171,22 @@ module.exports = async function handler(req, res) {
       updatePayload.rejection_quien = 'cliente';
       updatePayload.rejection_motivo = detailText || 'Sin motivo registrado';
     }
+    // Update condicional (status=eq.oldStatus en el filtro): si otro
+    // request, o el recruiter desde el ATS, ya movió esta postulación
+    // mientras tanto, PostgREST no toca ninguna fila y updRows vuelve
+    // vacío — evita pisar un estado más avanzado (ej. 'offer') con
+    // 'rechazado'/'entrevista_cliente_fit' (carrera, hallazgo de Greptile).
     const updResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/applications?id=eq.${application_id}`,
-      { method: 'PATCH', headers: { ...baseHeaders, Prefer: 'return=minimal' }, body: JSON.stringify(updatePayload) }
+      `${SUPABASE_URL}/rest/v1/applications?id=eq.${application_id}&status=eq.${encodeURIComponent(oldStatus)}`,
+      { method: 'PATCH', headers: { ...baseHeaders, Prefer: 'return=representation' }, body: JSON.stringify(updatePayload) }
     );
     if (!updResp.ok) {
       const errBody = await updResp.json().catch(() => ({}));
       return res.status(updResp.status).json({ error: errBody });
+    }
+    const updRows = await updResp.json();
+    if (!Array.isArray(updRows) || updRows.length === 0) {
+      return res.status(409).json({ error: 'La postulación cambió de estado mientras tanto — recargá el portal e intentá de nuevo' });
     }
 
     // changed_by queda null (no hay usuario interno acá) — status_history
@@ -178,6 +210,20 @@ module.exports = async function handler(req, res) {
     if (!noteResp.ok) {
       const errBody = await noteResp.json().catch(() => ({}));
       console.error('portal-candidate-action: client_portal_notes insert failed', errBody);
+    }
+
+    // Si el estado cambió pero el rastro (status_history/client_portal_notes)
+    // no se pudo guardar, no devolvemos ok:true sobre una escritura a medio
+    // hacer (hallazgo de Greptile) — revertimos el estado y avisamos error
+    // real, para que el cliente reintente en vez de creer que ya quedó.
+    if (!histResp.ok || !noteResp.ok) {
+      const rollbackPayload = { status: oldStatus, last_updated: now };
+      if (action === 'reject') { rollbackPayload.rejection_quien = null; rollbackPayload.rejection_motivo = null; }
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/applications?id=eq.${application_id}`,
+        { method: 'PATCH', headers: { ...baseHeaders, Prefer: 'return=minimal' }, body: JSON.stringify(rollbackPayload) }
+      ).catch(e => console.error('portal-candidate-action: rollback failed', e));
+      return res.status(500).json({ error: 'No se pudo completar la acción, intentá de nuevo' });
     }
 
     // El mail al recruiter es best-effort: si Resend no está configurado o
@@ -205,7 +251,7 @@ module.exports = async function handler(req, res) {
           const c = t[action];
           const ctaUrl = `https://hwgats.vercel.app/portal/${portal_token}`;
           const html = buildEmailHtml(t, action, candidateName, positionRole, client.name || '', detailText, ctaUrl);
-          await fetch('https://api.resend.com/emails', {
+          const emailResp = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -216,6 +262,10 @@ module.exports = async function handler(req, res) {
               html,
             }),
           });
+          if (!emailResp.ok) {
+            const emailErr = await emailResp.json().catch(() => ({}));
+            console.error('portal-candidate-action: Resend error', emailErr);
+          }
         }
       } catch (mailErr) {
         console.error('portal-candidate-action: email failed', mailErr);
