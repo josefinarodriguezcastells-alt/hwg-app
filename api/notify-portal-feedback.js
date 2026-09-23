@@ -181,9 +181,15 @@ module.exports = async function handler(req, res) {
       // La nota más reciente de este candidato para este cliente — el
       // frontend ya insertó la nota en client_portal_notes antes de llamar
       // acá (mismo request handler que hizo el insert, secuencial), así
-      // que para cuando esto corre ya está persistida.
+      // que para cuando esto corre ya está persistida. Se filtra por
+      // application_id, no solo candidate_id+client_id: un candidato puede
+      // tener más de una postulación activa con el mismo cliente (dos
+      // búsquedas distintas), y sin este filtro el comentario de una
+      // podía quedar atribuido por error a la otra si había actividad
+      // simultánea en ambas tarjetas (encontrado en revisión manual, no
+      // por Greptile — se le acabaron los créditos de prueba).
       const noteResp = await fetch(
-        `${SUPABASE_URL}/rest/v1/client_portal_notes?candidate_id=eq.${app.candidate_id}&client_id=eq.${client.id}&select=note&order=created_at.desc&limit=1`,
+        `${SUPABASE_URL}/rest/v1/client_portal_notes?application_id=eq.${application_id}&select=note&order=created_at.desc&limit=1`,
         { headers: baseHeaders }
       );
       if (!noteResp.ok) {
