@@ -17,8 +17,6 @@ const SECRET = 'test-secret';
 process.env.SESSION_SECRET = SECRET;
 process.env.ANTHROPIC_API_KEY = 'sk-fake';
 process.env.AI_PROVIDER = 'claude';
-process.env.SUPABASE_URL = 'https://fake.supabase.co';
-process.env.SUPABASE_SERVICE_KEY = 'svc-fake';
 
 const realFetch = globalThis.fetch;
 let aiCalls = [];
@@ -29,10 +27,6 @@ globalThis.fetch = async (url, opts = {}) => {
     const body = JSON.parse(opts.body);
     aiCalls.push({ model: body.model, max_tokens: body.max_tokens });
     return new Response(JSON.stringify({ content: [{ type: 'text', text: '{}' }] }), { status: 200 });
-  }
-  if (url.startsWith('https://fake.supabase.co/rest/v1/clients')) {
-    const ok = url.includes('portal_token=eq.PORTAL_OK');
-    return new Response(JSON.stringify(ok ? [{ id: 'c1' }] : []), { status: 200 });
   }
   throw new Error('fetch no mockeado: ' + url);
 };
@@ -125,27 +119,18 @@ for (const name of ['generate', 'extract-profile', 'extract-text']) {
   });
 }
 
-test('analyze: portal_token válido fija Haiku y 500 tokens', async () => {
-  const r = await post('analyze', { body: bodies.analyze({ portal_token: 'PORTAL_OK' }) });
-  assert.equal(r.status, 200, r.text);
-  assert.deepEqual(r.aiCalls, [{ model: 'claude-haiku-4-5-20251001', max_tokens: 500 }]);
-});
-
-test('analyze: portal_token válido no puede subir max_tokens pero sí bajarlo', async () => {
-  const r = await post('analyze', { body: bodies.analyze({ portal_token: 'PORTAL_OK', max_tokens: 100 }) });
-  assert.deepEqual(r.aiCalls, [{ model: 'claude-haiku-4-5-20251001', max_tokens: 100 }]);
-});
-
-test('analyze: portal_token que no es de un portal activo → 403 sin llegar a la IA', async () => {
-  const r = await post('analyze', { body: bodies.analyze({ portal_token: 'NOPE' }) });
-  assert.equal(r.status, 403, r.text);
-  assert.equal(r.aiCalls.length, 0);
-});
-
-test('analyze: con sesión válida gana la sesión aunque venga portal_token', async () => {
-  const r = await post('analyze', { auth: bearer('recruiter'), body: bodies.analyze({ portal_token: 'NOPE' }) });
+// El portal de clientes usa /api/portal-analysis. En analyze, portal_token
+// ya no abre un camino aparte: no se consulta la base ni cambia el modelo.
+test('analyze: con sesión válida, portal_token se ignora', async () => {
+  const r = await post('analyze', { auth: bearer('recruiter'), body: bodies.analyze({ portal_token: 'PORTAL_OK' }) });
   assert.equal(r.status, 200, r.text);
   assert.deepEqual(r.aiCalls, [{ model: 'claude-opus-x', max_tokens: 4000 }]);
+});
+
+test('analyze: con token inválido, portal_token no lo salva → 401', async () => {
+  const r = await post('analyze', { auth: 'Bearer basura', body: bodies.analyze({ portal_token: 'PORTAL_OK' }) });
+  assert.equal(r.status, 401, r.text);
+  assert.equal(r.aiCalls.length, 0);
 });
 
 // Paso 1 de 3: sin sesión todavía se deja pasar (el ATS en producción aún
