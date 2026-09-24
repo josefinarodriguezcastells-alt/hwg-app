@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const { requireRole } = require('./_auth');
+const { findLatestForPair } = require('./_presentations');
 
 module.exports = async function handler(req, res) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -9,9 +11,21 @@ module.exports = async function handler(req, res) {
   }
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  // Solo el ATS (owner o recruiter con sesión) puede publicar: si no,
+  // cualquiera con un candidate_id y un position_id podía publicar (o, con
+  // la actualización en el lugar de abajo, reemplazar) el informe que el
+  // cliente ve en su link y en su portal. La sesión puede venir en el
+  // header Authorization o en el body (session_token) — el ATS la manda en
+  // el body para no depender del preflight CORS del header.
+  if (!req.headers?.authorization && typeof req.body?.session_token === 'string' && req.body.session_token) {
+    req.headers = { ...(req.headers || {}), authorization: `Bearer ${req.body.session_token}` };
+  }
+  const session = requireRole(req, res, ['owner', 'recruiter']);
+  if (!session) return;
 
   try {
     const { profile_data, candidate_id, position_id, recruiter_id } = req.body;
@@ -25,6 +39,43 @@ module.exports = async function handler(req, res) {
     // claro que dejar una fila fantasma que nadie va a encontrar después.
     if (!candidate_id || !position_id) {
       return res.status(400).json({ error: 'candidate_id y position_id son requeridos para publicar un informe' });
+    }
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer': 'return=representation',
+    };
+    const appUrl = process.env.APP_URL || 'https://hwg-app.vercel.app';
+
+    // Un informe por candidato+posición: si ya hay uno, se actualiza en el
+    // lugar (mismo token, mismo link que el cliente ya pueda tener) en vez
+    // de crear otro. Antes siempre insertaba, y cualquier camino del ATS
+    // que llegara acá con un informe ya publicado dejaba un duplicado.
+    const existing = await findLatestForPair({
+      supabaseUrl: SUPABASE_URL, headers, candidateId: candidate_id, positionId: position_id, select: 'id,token',
+    });
+    if (existing) {
+      const upd = await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(existing.id)}`, {
+        method: 'PATCH',
+        headers,
+        // published_at no se toca: es la fecha en que se presentó al
+      // candidato (la que muestran el link y el ATS), igual que cuando se
+      // edita el informe desde el ATS.
+      body: JSON.stringify({ profile_data, is_published: true, updated_at: new Date().toISOString() }),
+      });
+      const updData = await upd.json();
+      if (!upd.ok) {
+        console.error('Supabase error:', updData);
+        return res.status(500).json({ error: 'Error guardando en Supabase', detail: updData });
+      }
+      return res.status(200).json({
+        token: existing.token,
+        id: existing.id,
+        url: `${appUrl}/perfil?token=${existing.token}`,
+        updated: true,
+      });
     }
 
     // Token único legible: nombre-empresa-hash corto
@@ -57,12 +108,7 @@ module.exports = async function handler(req, res) {
 
     const response = await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Prefer': 'return=representation',
-      },
+      headers,
       body: JSON.stringify(payload),
     });
 
@@ -73,12 +119,47 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'Error guardando en Supabase', detail: result });
     }
 
-    const saved = Array.isArray(result) ? result[0] : result;
+    let saved = Array.isArray(result) ? result[0] : result;
+
+    // Dos publicaciones simultáneas del mismo candidato+posición pueden
+    // pasar las dos el chequeo de arriba e insertar. Se relee el par: si hay
+    // más de una fila, todas eligen la misma ganadora (la primera por
+    // published_at e id), le pasan este contenido, y la perdedora se borra
+    // a sí misma — así queda un solo informe y un solo link. (Un índice
+    // único en la base sería lo ideal, pero hoy hay duplicados históricos
+    // que lo impiden.)
+    const pairResp = await fetch(
+      `${SUPABASE_URL}/rest/v1/candidate_presentations?candidate_id=eq.${encodeURIComponent(candidate_id)}`
+        + `&position_id=eq.${encodeURIComponent(position_id)}&select=id,token&order=published_at.asc,id.asc`,
+      { headers }
+    );
+    // Si algún paso falla se responde error (no un "ok" que no se cumplió).
+    // Reintentar es seguro: la fila ya existe, así que el próximo pedido va
+    // por el camino de actualizar en el lugar.
+    const retry = (what, detail) => {
+      console.error(`save-profile: ${what}`, detail);
+      return res.status(500).json({ error: 'No se pudo confirmar la publicación. Intentá de nuevo.', detail });
+    };
+    if (!pairResp.ok) return retry('releer el par', await pairResp.text());
+    const pair = await pairResp.json();
+    const winner = Array.isArray(pair) && pair[0];
+    if (winner && winner.id !== saved.id) {
+      const upd = await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(winner.id)}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ profile_data, is_published: true, updated_at: new Date().toISOString() }),
+      });
+      if (!upd.ok) return retry('actualizar la fila ganadora', await upd.text());
+      const del = await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(saved.id)}`, {
+        method: 'DELETE', headers,
+      });
+      if (!del.ok) return retry('borrar la fila duplicada', await del.text());
+      saved = winner;
+    }
 
     return res.status(200).json({
       token: saved.token,
       id: saved.id,
-      url: `${process.env.APP_URL || 'https://hwg-app.vercel.app'}/perfil?token=${saved.token}`,
+      url: `${appUrl}/perfil?token=${saved.token}`,
     });
 
   } catch (e) {
