@@ -1,6 +1,9 @@
 {
   "name": "hwg-candidate-app",
   "version": "1.0.0",
+  "scripts": {
+    "test": "node --test test/"
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "docx": "^8.5.0",
