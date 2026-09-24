@@ -17,7 +17,7 @@ const COPY = {
       `Tenemos un nuevo candidato para tu revisión: <strong>${candidateName}</strong>, para la búsqueda de <strong>${positionRole}</strong>.`,
     salaryLabel: 'Salario pretendido',
     cta: 'Ver informe completo →',
-    portalCta: 'Ir a tu portal →',
+    portalCta: 'Portal',
     closing: 'Aguardamos tus comentarios.',
     signoff: 'Saludos,<br/>HWG Team',
     footer: 'HWG Talent Consultants · Notificación automática desde el portal de clientes',
@@ -31,7 +31,7 @@ const COPY = {
       `We have a new candidate for your review: <strong>${candidateName}</strong>, for the <strong>${positionRole}</strong> search.`,
     salaryLabel: 'Expected salary',
     cta: 'View full report →',
-    portalCta: 'Go to your portal →',
+    portalCta: 'Portal',
     closing: "We're looking forward to your feedback.",
     signoff: 'Best,<br/>HWG Team',
     footer: 'HWG Talent Consultants · Automatic notification from the client portal',
@@ -63,8 +63,15 @@ export default async function handler(req, res) {
       lang,               // 'es' | 'en', elegido por el recruiter
     } = req.body;
 
-    if (!Array.isArray(to) || to.length === 0 || !candidateName || !positionRole || !portalUrl || !recruiterEmail) {
-      return res.status(400).json({ error: 'Faltan datos (to, candidateName, positionRole, portalUrl, recruiterEmail)' });
+    // informeUrl pasa a ser obligatorio, no opcional — Jo lo vio en un mail
+    // real (candidato Nicolás Mogliani): con informeUrl vacío, el botón
+    // "Ver informe completo" caía en silencio a portalUrl, así que el
+    // cliente veía un botón con esa etiqueta que en realidad lo mandaba al
+    // portal. Mejor rechazar el envío acá con un error claro (el frontend
+    // ya lo muestra en el modal) que mandar un mail con un botón que dice
+    // una cosa y hace otra.
+    if (!Array.isArray(to) || to.length === 0 || !candidateName || !positionRole || !informeUrl || !portalUrl || !recruiterEmail) {
+      return res.status(400).json({ error: 'Faltan datos (to, candidateName, positionRole, informeUrl, portalUrl, recruiterEmail)' });
     }
 
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -99,16 +106,15 @@ export default async function handler(req, res) {
 
       ${salarySection}
 
-      <div style="text-align:center;margin-bottom:${informeUrl ? '10px' : '8px'};">
-        <a href="${informeUrl || portalUrl}"
+      <div style="text-align:center;margin-bottom:10px;">
+        <a href="${informeUrl}"
            style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
           ${t.cta}
         </a>
       </div>
-      ${informeUrl ? `
       <div style="text-align:center;margin-bottom:8px;">
         <a href="${portalUrl}" style="color:#7c3aed;font-size:12px;text-decoration:none;">${t.portalCta}</a>
-      </div>` : ''}
+      </div>
 
       <p style="margin:24px 0 0;font-size:14px;color:#111827;line-height:1.6;">${t.closing}</p>
       <p style="margin:16px 0 0;font-size:14px;color:#111827;line-height:1.6;">${t.signoff}</p>
