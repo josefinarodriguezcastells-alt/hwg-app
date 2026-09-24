@@ -13,6 +13,8 @@
 // tiene a mano sin depender del link. No se guarda en ningún lado — viaja
 // en este pedido y se adjunta al mail.
 
+import { requireRole } from './_auth.js';
+
 // Tope del adjunto (ya decodificado). Un informe real pesa ~75 KB; esto
 // deja margen de sobra y queda lejos del límite de 4,5 MB por pedido de
 // Vercel (el base64 pesa ~33% más).
@@ -54,7 +56,7 @@ const COPY = {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
@@ -94,8 +96,20 @@ export default async function handler(req, res) {
     // no tendría el PDF que se le prometió en el cuerpo del mail).
     let attachments;
     if (pdfBase64 != null) {
+      // Mandar un archivo arbitrario desde la dirección de HWG solo con
+      // sesión del ATS (owner o recruiter) — si no, cualquiera que conozca
+      // esta URL podría distribuir un "informe" falso a nombre de HWG.
+      // El mail sin adjunto todavía no exige sesión porque el ATS que está
+      // en producción hoy no la manda; cerrarlo también es el paso
+      // siguiente, una vez deployado el ATS que manda el token.
+      const session = requireRole(req, res, ['owner', 'recruiter']);
+      if (!session) return;
       const buf = typeof pdfBase64 === 'string' ? Buffer.from(pdfBase64, 'base64') : null;
-      if (!buf || buf.length === 0 || buf.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      // Empieza con %PDF- y termina con %%EOF (en el último KB, puede venir
+      // seguido de un salto de línea): descarta archivos cortados a medias
+      // que el cliente no podría abrir.
+      if (!buf || buf.length === 0 || buf.subarray(0, 5).toString('latin1') !== '%PDF-'
+          || !buf.subarray(-1024).toString('latin1').includes('%%EOF')) {
         return res.status(400).json({ error: 'El adjunto no es un PDF válido' });
       }
       if (buf.length > MAX_PDF_BYTES) {
@@ -185,7 +199,8 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: data.message || 'Error al enviar mail' });
     }
 
-    return res.status(200).json({ ok: true, id: data.id });
+    // attached: el ATS lo usa para confirmarle al recruiter si el PDF salió.
+    return res.status(200).json({ ok: true, id: data.id, attached: !!attachments });
 
   } catch (err) {
     console.error('notify-new-candidate error:', err);
