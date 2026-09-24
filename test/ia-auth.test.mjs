@@ -20,6 +20,11 @@ process.env.AI_PROVIDER = 'claude';
 process.env.SUPABASE_URL = 'https://fake.supabase.co';
 process.env.SUPABASE_SERVICE_KEY = 'svc-fake';
 
+const CLIENTS = [
+  { id: 'c1', portal_token: 'PORTAL_OK', portal_pin: '1234', portal_active: true },
+  { id: 'c2', portal_token: 'PORTAL_INACTIVO', portal_pin: '1234', portal_active: false },
+];
+
 const realFetch = globalThis.fetch;
 let aiCalls = [];
 globalThis.fetch = async (url, opts = {}) => {
@@ -31,8 +36,12 @@ globalThis.fetch = async (url, opts = {}) => {
     return new Response(JSON.stringify({ content: [{ type: 'text', text: '{}' }] }), { status: 200 });
   }
   if (url.startsWith('https://fake.supabase.co/rest/v1/clients')) {
-    const ok = url.includes('portal_token=eq.PORTAL_OK');
-    return new Response(JSON.stringify(ok ? [{ id: 'c1' }] : []), { status: 200 });
+    // Aplica los filtros eq. de la URL como PostgREST: si el endpoint deja
+    // de filtrar por portal_pin o portal_active, los tests lo detectan.
+    const params = new URL(url).searchParams;
+    const rows = CLIENTS.filter(c => [...params].every(([k, v]) =>
+      k === 'select' || (v.startsWith('eq.') && String(c[k]) === v.slice(3))));
+    return new Response(JSON.stringify(rows.map(c => ({ id: c.id }))), { status: 200 });
   }
   throw new Error('fetch no mockeado: ' + url);
 };
@@ -125,22 +134,31 @@ for (const name of ['generate', 'extract-profile', 'extract-text']) {
   });
 }
 
-test('analyze: portal_token válido fija Haiku y 500 tokens', async () => {
-  const r = await post('analyze', { body: bodies.analyze({ portal_token: 'PORTAL_OK' }) });
+const PORTAL = { portal_token: 'PORTAL_OK', portal_pin: '1234' };
+
+test('analyze: portal_token + PIN válidos fija Haiku y 500 tokens', async () => {
+  const r = await post('analyze', { body: bodies.analyze(PORTAL) });
   assert.equal(r.status, 200, r.text);
   assert.deepEqual(r.aiCalls, [{ model: 'claude-haiku-4-5-20251001', max_tokens: 500 }]);
 });
 
-test('analyze: portal_token válido no puede subir max_tokens pero sí bajarlo', async () => {
-  const r = await post('analyze', { body: bodies.analyze({ portal_token: 'PORTAL_OK', max_tokens: 100 }) });
+test('analyze: por el portal no se puede subir max_tokens pero sí bajarlo', async () => {
+  const r = await post('analyze', { body: bodies.analyze({ ...PORTAL, max_tokens: 100 }) });
   assert.deepEqual(r.aiCalls, [{ model: 'claude-haiku-4-5-20251001', max_tokens: 100 }]);
 });
 
-test('analyze: portal_token que no es de un portal activo → 403 sin llegar a la IA', async () => {
-  const r = await post('analyze', { body: bodies.analyze({ portal_token: 'NOPE' }) });
-  assert.equal(r.status, 403, r.text);
-  assert.equal(r.aiCalls.length, 0);
-});
+for (const [label, extra, status] of [
+  ['portal_token sin PIN (solo el link del portal)', { portal_token: 'PORTAL_OK' }, 401],
+  ['PIN incorrecto', { portal_token: 'PORTAL_OK', portal_pin: '0000' }, 403],
+  ['portal existente pero inactivo', { portal_token: 'PORTAL_INACTIVO', portal_pin: '1234' }, 403],
+  ['portal_token inexistente', { portal_token: 'NOPE', portal_pin: '1234' }, 403],
+]) {
+  test(`analyze: ${label} → ${status} sin llegar a la IA`, async () => {
+    const r = await post('analyze', { body: bodies.analyze(extra) });
+    assert.equal(r.status, status, r.text);
+    assert.equal(r.aiCalls.length, 0);
+  });
+}
 
 test('analyze: con sesión válida gana la sesión aunque venga portal_token', async () => {
   const r = await post('analyze', { auth: bearer('recruiter'), body: bodies.analyze({ portal_token: 'NOPE' }) });
