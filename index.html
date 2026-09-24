@@ -323,28 +323,12 @@
         fitCriteria,
       });
 
-      const publish = async () => {
-        setPublishing(true);
-        try {
-          const profileData = buildProfileData();
-          const res = await fetch('/api/save-profile', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-              profile_data: profileData,
-              candidate_id: candidateId || null,
-              position_id:  positionId  || null,
-              recruiter_id: recruiterId || null,
-            })
-          });
-          const result = await res.json();
-          if (!res.ok || result.error) throw new Error(result.error || 'Error al publicar');
-          setPublishedUrl(result.url);
-        } catch(e) {
-          alert('Error al publicar: ' + e.message);
-        } finally {
-          setPublishing(false);
-        }
+      // Publicar un informe exige sesión del ATS (api/save-profile), y este
+      // generador no tiene login: el ATS es el único lugar donde se presenta
+      // un candidato (scorecard + informe + portal del cliente). Se avisa en
+      // vez de mandar un pedido que va a fallar.
+      const publish = () => {
+        alert('Los informes se publican desde el ATS (hwgats.vercel.app), en la ficha del candidato → pestaña Informe.');
       };
 
       const copyLink = () => {

@@ -133,16 +133,26 @@ module.exports = async function handler(req, res) {
         + `&position_id=eq.${encodeURIComponent(position_id)}&select=id,token&order=published_at.asc,id.asc`,
       { headers }
     );
-    const pair = pairResp.ok ? await pairResp.json() : [];
+    // Si algún paso falla se responde error (no un "ok" que no se cumplió).
+    // Reintentar es seguro: la fila ya existe, así que el próximo pedido va
+    // por el camino de actualizar en el lugar.
+    const retry = (what, detail) => {
+      console.error(`save-profile: ${what}`, detail);
+      return res.status(500).json({ error: 'No se pudo confirmar la publicación. Intentá de nuevo.', detail });
+    };
+    if (!pairResp.ok) return retry('releer el par', await pairResp.text());
+    const pair = await pairResp.json();
     const winner = Array.isArray(pair) && pair[0];
     if (winner && winner.id !== saved.id) {
-      await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(winner.id)}`, {
+      const upd = await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(winner.id)}`, {
         method: 'PATCH', headers,
         body: JSON.stringify({ profile_data, is_published: true, updated_at: new Date().toISOString() }),
       });
-      await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(saved.id)}`, {
+      if (!upd.ok) return retry('actualizar la fila ganadora', await upd.text());
+      const del = await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(saved.id)}`, {
         method: 'DELETE', headers,
       });
+      if (!del.ok) return retry('borrar la fila duplicada', await del.text());
       saved = winner;
     }
 
