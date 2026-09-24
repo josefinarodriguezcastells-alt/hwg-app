@@ -63,6 +63,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Solo el ATS (owner o recruiter con sesión) puede mandar este mail. Sin
+  // esto cualquiera que conociera la URL podía mandar mails desde la
+  // dirección de HWG a quien quisiera, con los links que quisiera. El ATS
+  // manda la sesión desde hwg_ats#53.
+  const session = requireRole(req, res, ['owner', 'recruiter']);
+  if (!session) return;
+
   try {
     const {
       to,                 // string[] — mails de los stakeholders del cliente
@@ -96,14 +103,6 @@ export default async function handler(req, res) {
     // no tendría el PDF que se le prometió en el cuerpo del mail).
     let attachments;
     if (pdfBase64 != null) {
-      // Mandar un archivo arbitrario desde la dirección de HWG solo con
-      // sesión del ATS (owner o recruiter) — si no, cualquiera que conozca
-      // esta URL podría distribuir un "informe" falso a nombre de HWG.
-      // El mail sin adjunto todavía no exige sesión porque el ATS que está
-      // en producción hoy no la manda; cerrarlo también es el paso
-      // siguiente, una vez deployado el ATS que manda el token.
-      const session = requireRole(req, res, ['owner', 'recruiter']);
-      if (!session) return;
       const buf = typeof pdfBase64 === 'string' ? Buffer.from(pdfBase64, 'base64') : null;
       // Empieza con %PDF- y termina con %%EOF (en el último KB, puede venir
       // seguido de un salto de línea): descarta archivos cortados a medias
