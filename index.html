@@ -301,41 +301,12 @@
         availability: data.personal?.availability || '',
         company:      data.personal?.company      || '',
       });
-      const [publishing, setPublishing] = useState(false);
-      const [publishedUrl, setPublishedUrl] = useState(null);
-      const [copied, setCopied] = useState(false);
 
       const updateFit = (key, val) => setFitCriteria(prev => ({...prev, [key]: val}));
       const updatePersonal = (key, val) => setPersonal(prev => ({...prev, [key]: val}));
 
       const techFitTotal = (fitCriteria.expRol||0) + (fitCriteria.stack||0) + (fitCriteria.seniority||0) + (fitCriteria.logros||0);
 
-      const buildProfileData = () => ({
-        ...data,
-        storytelling,
-        gap: gaps,
-        recommendation,
-        personal,
-        snapshot: {
-          ...data.snapshot,
-          techFit: String(techFitTotal),
-        },
-        fitCriteria,
-      });
-
-      // Publicar un informe exige sesión del ATS (api/save-profile), y este
-      // generador no tiene login: el ATS es el único lugar donde se presenta
-      // un candidato (scorecard + informe + portal del cliente). Se avisa en
-      // vez de mandar un pedido que va a fallar.
-      const publish = () => {
-        alert('Los informes se publican desde el ATS (hwgats.vercel.app), en la ficha del candidato → pestaña Informe.');
-      };
-
-      const copyLink = () => {
-        navigator.clipboard.writeText(publishedUrl);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2500);
-      };
 
       return (
         <div className="fade-in" style={{marginTop:24}}>
@@ -344,30 +315,16 @@
           <div style={{background:'#fff',borderRadius:12,padding:'16px 20px',marginBottom:20,border:'1.5px solid #6C3BFF',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
             <div>
               <div style={{fontSize:13,fontWeight:600,color:'#3C3489'}}>Vista previa — {data.name}</div>
-              <div style={{fontSize:12,color:'#6B7280',marginTop:2}}>Editá los puntitos, el texto y la recomendación antes de publicar.</div>
+              {/* Este generador ya no publica: publicar exige sesión del ATS
+                  (api/save-profile), y el ATS es el único lugar donde se
+                  presenta un candidato (scorecard + informe + portal + PDF). */}
+              <div style={{fontSize:12,color:'#92400E',marginTop:2}}>Solo vista previa — desde acá no se publica. Para presentar al candidato (link, portal y PDF), cargalo en el ATS: ficha del candidato → pestaña Informe.</div>
             </div>
             <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-              {!publishedUrl ? (
-                <button
-                  onClick={publish}
-                  disabled={publishing}
-                  style={{padding:'10px 22px',background:publishing?'#ccc':'#3C3489',color:'#fff',border:'none',borderRadius:8,fontSize:13,fontWeight:600,cursor:publishing?'not-allowed':'pointer',fontFamily:'DM Sans,sans-serif',whiteSpace:'nowrap'}}
-                >
-                  {publishing ? 'Publicando...' : 'Publicar y copiar link →'}
-                </button>
-              ) : (
-                <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-                  <div style={{background:'#F0EBFF',borderRadius:8,padding:'8px 14px',fontSize:12,color:'#534AB7',fontWeight:500,maxWidth:300,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                    {publishedUrl}
-                  </div>
-                  <button
-                    onClick={copyLink}
-                    style={{padding:'9px 18px',background:copied?'#0F6E56':'#6C3BFF',color:'#fff',border:'none',borderRadius:8,fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'DM Sans,sans-serif',whiteSpace:'nowrap',transition:'background 0.2s'}}
-                  >
-                    {copied ? '✓ Copiado' : 'Copiar link'}
-                  </button>
-                </div>
-              )}
+              <a href="https://hwgats.vercel.app" target="_blank" rel="noopener noreferrer"
+                style={{padding:'10px 22px',background:'#3C3489',color:'#fff',borderRadius:8,fontSize:13,fontWeight:600,fontFamily:'DM Sans,sans-serif',whiteSpace:'nowrap',textDecoration:'none'}}>
+                Ir al ATS →
+              </a>
             </div>
           </div>
 
