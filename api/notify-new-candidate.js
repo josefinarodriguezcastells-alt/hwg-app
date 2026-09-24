@@ -7,6 +7,18 @@
 // llevando la búsqueda, no a una casilla sin dueño. `lang` lo elige el
 // recruiter a mano en el momento de mandar (no se infiere) porque hay
 // clientes en inglés y no hay ningún campo de idioma guardado por cliente.
+//
+// Opcionalmente adjunta el informe en PDF (pdfBase64): lo arma el ATS en el
+// navegador con los mismos datos del link publicado, así el cliente lo
+// tiene a mano sin depender del link. No se guarda en ningún lado — viaja
+// en este pedido y se adjunta al mail.
+
+import { requireRole } from './_auth.js';
+
+// Tope del adjunto (ya decodificado). Un informe real pesa ~75 KB; esto
+// deja margen de sobra y queda lejos del límite de 4,5 MB por pedido de
+// Vercel (el base64 pesa ~33% más).
+const MAX_PDF_BYTES = 2 * 1024 * 1024;
 
 const COPY = {
   es: {
@@ -18,6 +30,7 @@ const COPY = {
     salaryLabel: 'Salario pretendido',
     cta: 'Ver informe completo →',
     portalCta: 'Portal',
+    attachmentNote: 'Te adjuntamos también el informe en PDF.',
     closing: 'Aguardamos tus comentarios.',
     signoff: 'Saludos,<br/>HWG Team',
     footer: 'HWG Talent Consultants · Notificación automática desde el portal de clientes',
@@ -32,6 +45,7 @@ const COPY = {
     salaryLabel: 'Expected salary',
     cta: 'View full report →',
     portalCta: 'Portal',
+    attachmentNote: "We've also attached the report as a PDF.",
     closing: "We're looking forward to your feedback.",
     signoff: 'Best,<br/>HWG Team',
     footer: 'HWG Talent Consultants · Automatic notification from the client portal',
@@ -42,7 +56,7 @@ const COPY = {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
@@ -61,6 +75,8 @@ export default async function handler(req, res) {
       portalUrl,          // link al portal del cliente
       recruiterEmail,     // reply-to
       lang,               // 'es' | 'en', elegido por el recruiter
+      pdfBase64,          // opcional — informe en PDF, base64 sin prefijo data:
+      pdfFilename,        // opcional — nombre del adjunto
     } = req.body;
 
     // informeUrl pasa a ser obligatorio, no opcional — Jo lo vio en un mail
@@ -72,6 +88,38 @@ export default async function handler(req, res) {
     // una cosa y hace otra.
     if (!Array.isArray(to) || to.length === 0 || !candidateName || !positionRole || !informeUrl || !portalUrl || !recruiterEmail) {
       return res.status(400).json({ error: 'Faltan datos (to, candidateName, positionRole, informeUrl, portalUrl, recruiterEmail)' });
+    }
+
+    // El PDF es opcional, pero si viene tiene que ser un PDF de verdad y de
+    // tamaño razonable: se rechaza el envío entero en vez de mandar el mail
+    // sin el adjunto en silencio (el recruiter vería "enviado" y el cliente
+    // no tendría el PDF que se le prometió en el cuerpo del mail).
+    let attachments;
+    if (pdfBase64 != null) {
+      // Mandar un archivo arbitrario desde la dirección de HWG solo con
+      // sesión del ATS (owner o recruiter) — si no, cualquiera que conozca
+      // esta URL podría distribuir un "informe" falso a nombre de HWG.
+      // El mail sin adjunto todavía no exige sesión porque el ATS que está
+      // en producción hoy no la manda; cerrarlo también es el paso
+      // siguiente, una vez deployado el ATS que manda el token.
+      const session = requireRole(req, res, ['owner', 'recruiter']);
+      if (!session) return;
+      const buf = typeof pdfBase64 === 'string' ? Buffer.from(pdfBase64, 'base64') : null;
+      // Empieza con %PDF- y termina con %%EOF (en el último KB, puede venir
+      // seguido de un salto de línea): descarta archivos cortados a medias
+      // que el cliente no podría abrir.
+      if (!buf || buf.length === 0 || buf.subarray(0, 5).toString('latin1') !== '%PDF-'
+          || !buf.subarray(-1024).toString('latin1').includes('%%EOF')) {
+        return res.status(400).json({ error: 'El adjunto no es un PDF válido' });
+      }
+      if (buf.length > MAX_PDF_BYTES) {
+        return res.status(400).json({ error: 'El PDF adjunto es demasiado grande (máx. 2 MB)' });
+      }
+      // Nombre de archivo seguro: sin rutas ni caracteres raros, siempre .pdf.
+      const base = String(pdfFilename || candidateName || 'informe')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/\.pdf$/i, '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || 'informe';
+      attachments = [{ filename: `${base}.pdf`, content: buf.toString('base64') }];
     }
 
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -105,6 +153,7 @@ export default async function handler(req, res) {
       <p style="margin:0 0 20px;font-size:14px;color:#111827;line-height:1.6;">${t.body(candidateName, positionRole)}</p>
 
       ${salarySection}
+      ${attachments ? `<p style="margin:0 0 20px;font-size:13px;color:#6b7280;line-height:1.6;">📎 ${t.attachmentNote}</p>` : ''}
 
       <div style="text-align:center;margin-bottom:10px;">
         <a href="${informeUrl}"
@@ -140,6 +189,7 @@ export default async function handler(req, res) {
         reply_to: recruiterEmail,
         subject: t.subject(positionRole, candidateName),
         html,
+        ...(attachments ? { attachments } : {}),
       }),
     });
 
@@ -149,7 +199,8 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: data.message || 'Error al enviar mail' });
     }
 
-    return res.status(200).json({ ok: true, id: data.id });
+    // attached: el ATS lo usa para confirmarle al recruiter si el PDF salió.
+    return res.status(200).json({ ok: true, id: data.id, attached: !!attachments });
 
   } catch (err) {
     console.error('notify-new-candidate error:', err);
