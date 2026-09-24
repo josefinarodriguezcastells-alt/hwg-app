@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const { requireRole } = require('./_auth');
+const { findLatestForPair } = require('./_presentations');
 
 module.exports = async function handler(req, res) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -9,9 +11,19 @@ module.exports = async function handler(req, res) {
   }
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  // Sesión del ATS: si viene, tiene que ser válida (owner/recruiter). Todavía
+  // no se exige porque el ATS en producción no la manda; el paso siguiente
+  // (una vez deployado el ATS que la manda) es exigirla siempre — sin eso,
+  // cualquiera con un candidate_id y un position_id puede publicar un
+  // informe que el portal le muestra al cliente como el vigente.
+  if (req.headers?.authorization) {
+    const session = requireRole(req, res, ['owner', 'recruiter']);
+    if (!session) return;
+  }
 
   try {
     const { profile_data, candidate_id, position_id, recruiter_id } = req.body;
@@ -25,6 +37,40 @@ module.exports = async function handler(req, res) {
     // claro que dejar una fila fantasma que nadie va a encontrar después.
     if (!candidate_id || !position_id) {
       return res.status(400).json({ error: 'candidate_id y position_id son requeridos para publicar un informe' });
+    }
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer': 'return=representation',
+    };
+    const appUrl = process.env.APP_URL || 'https://hwg-app.vercel.app';
+
+    // Un informe por candidato+posición: si ya hay uno, se actualiza en el
+    // lugar (mismo token, mismo link que el cliente ya pueda tener) en vez
+    // de crear otro. Antes siempre insertaba, y cualquier camino del ATS
+    // que llegara acá con un informe ya publicado dejaba un duplicado.
+    const existing = await findLatestForPair({
+      supabaseUrl: SUPABASE_URL, headers, candidateId: candidate_id, positionId: position_id, select: 'id,token',
+    });
+    if (existing) {
+      const upd = await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(existing.id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ profile_data, is_published: true, updated_at: new Date().toISOString() }),
+      });
+      const updData = await upd.json();
+      if (!upd.ok) {
+        console.error('Supabase error:', updData);
+        return res.status(500).json({ error: 'Error guardando en Supabase', detail: updData });
+      }
+      return res.status(200).json({
+        token: existing.token,
+        id: existing.id,
+        url: `${appUrl}/perfil?token=${existing.token}`,
+        updated: true,
+      });
     }
 
     // Token único legible: nombre-empresa-hash corto
@@ -57,12 +103,7 @@ module.exports = async function handler(req, res) {
 
     const response = await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Prefer': 'return=representation',
-      },
+      headers,
       body: JSON.stringify(payload),
     });
 
@@ -78,7 +119,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       token: saved.token,
       id: saved.id,
-      url: `${process.env.APP_URL || 'https://hwg-app.vercel.app'}/perfil?token=${saved.token}`,
+      url: `${appUrl}/perfil?token=${saved.token}`,
     });
 
   } catch (e) {
