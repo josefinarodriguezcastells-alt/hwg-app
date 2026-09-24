@@ -15,15 +15,17 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Sesión del ATS: si viene, tiene que ser válida (owner/recruiter). Todavía
-  // no se exige porque el ATS en producción no la manda; el paso siguiente
-  // (una vez deployado el ATS que la manda) es exigirla siempre — sin eso,
-  // cualquiera con un candidate_id y un position_id puede publicar un
-  // informe que el portal le muestra al cliente como el vigente.
-  if (req.headers?.authorization) {
-    const session = requireRole(req, res, ['owner', 'recruiter']);
-    if (!session) return;
+  // Solo el ATS (owner o recruiter con sesión) puede publicar: si no,
+  // cualquiera con un candidate_id y un position_id podía publicar (o, con
+  // la actualización en el lugar de abajo, reemplazar) el informe que el
+  // cliente ve en su link y en su portal. La sesión puede venir en el
+  // header Authorization o en el body (session_token) — el ATS la manda en
+  // el body para no depender del preflight CORS del header.
+  if (!req.headers?.authorization && typeof req.body?.session_token === 'string' && req.body.session_token) {
+    req.headers = { ...(req.headers || {}), authorization: `Bearer ${req.body.session_token}` };
   }
+  const session = requireRole(req, res, ['owner', 'recruiter']);
+  if (!session) return;
 
   try {
     const { profile_data, candidate_id, position_id, recruiter_id } = req.body;
@@ -58,7 +60,10 @@ module.exports = async function handler(req, res) {
       const upd = await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(existing.id)}`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify({ profile_data, is_published: true, updated_at: new Date().toISOString() }),
+        // published_at no se toca: es la fecha en que se presentó al
+      // candidato (la que muestran el link y el ATS), igual que cuando se
+      // edita el informe desde el ATS.
+      body: JSON.stringify({ profile_data, is_published: true, updated_at: new Date().toISOString() }),
       });
       const updData = await upd.json();
       if (!upd.ok) {
@@ -114,7 +119,32 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'Error guardando en Supabase', detail: result });
     }
 
-    const saved = Array.isArray(result) ? result[0] : result;
+    let saved = Array.isArray(result) ? result[0] : result;
+
+    // Dos publicaciones simultáneas del mismo candidato+posición pueden
+    // pasar las dos el chequeo de arriba e insertar. Se relee el par: si hay
+    // más de una fila, todas eligen la misma ganadora (la primera por
+    // published_at e id), le pasan este contenido, y la perdedora se borra
+    // a sí misma — así queda un solo informe y un solo link. (Un índice
+    // único en la base sería lo ideal, pero hoy hay duplicados históricos
+    // que lo impiden.)
+    const pairResp = await fetch(
+      `${SUPABASE_URL}/rest/v1/candidate_presentations?candidate_id=eq.${encodeURIComponent(candidate_id)}`
+        + `&position_id=eq.${encodeURIComponent(position_id)}&select=id,token&order=published_at.asc,id.asc`,
+      { headers }
+    );
+    const pair = pairResp.ok ? await pairResp.json() : [];
+    const winner = Array.isArray(pair) && pair[0];
+    if (winner && winner.id !== saved.id) {
+      await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(winner.id)}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ profile_data, is_published: true, updated_at: new Date().toISOString() }),
+      });
+      await fetch(`${SUPABASE_URL}/rest/v1/candidate_presentations?id=eq.${encodeURIComponent(saved.id)}`, {
+        method: 'DELETE', headers,
+      });
+      saved = winner;
+    }
 
     return res.status(200).json({
       token: saved.token,
