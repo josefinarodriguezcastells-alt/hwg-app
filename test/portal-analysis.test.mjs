@@ -151,6 +151,14 @@ test('posición del cliente pero oculta en el portal → 404 sin llegar a la IA'
   assert.equal(calls.ai.length, 0);
 });
 
+test('posición ajena u oculta: no lee las postulaciones', async () => {
+  for (const position_id of [P2, P3]) {
+    calls.supabase = [];
+    await post({ portal_token: 'PORTAL_OK', position_id });
+    assert.equal(calls.supabase.filter(c => c.table === 'applications').length, 0);
+  }
+});
+
 test('caso válido: Haiku, 500 tokens, prompt armado en el servidor y guardado', async () => {
   const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
   assert.equal(r.status, 200, JSON.stringify(r.body));

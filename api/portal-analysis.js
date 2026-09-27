@@ -123,14 +123,15 @@ async function handler(req, res) {
     if (!client) return res.status(403).json({ error: 'Portal inválido' });
 
     // Filtrar por client_id en la misma consulta: una posición de otro
-    // cliente da lo mismo que una que no existe.
-    const [positions, vis, apps] = await Promise.all([
+    // cliente da lo mismo que una que no existe. Las postulaciones se leen
+    // recién después, así una posición ajena u oculta no cuesta recorrerlas.
+    const [positions, vis] = await Promise.all([
       get(`positions?id=eq.${position_id}&client_id=eq.${client.id}&select=id,role,opened_at,salary_band,jd_structured`),
       getAll(`client_portal_visibility?client_id=eq.${client.id}&position_id=eq.${position_id}&select=candidate_id,visible&order=id`),
-      getAll(`applications?position_id=eq.${position_id}&select=candidate_id,status,rejection_motivo&order=id`),
     ]);
     const pos = positions[0];
     if (!pos || !posicionVisible(vis)) return res.status(404).json({ error: 'Posición no encontrada' });
+    const apps = await getAll(`applications?position_id=eq.${position_id}&select=candidate_id,status,rejection_motivo&order=id`);
 
     const prompt = armarPrompt(resumenPosicion(pos, apps, vis));
     const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
