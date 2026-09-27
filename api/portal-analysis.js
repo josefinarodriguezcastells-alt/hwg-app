@@ -15,6 +15,8 @@ const MAX_TOKENS = 500;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RECHAZADOS = ['rechazado_salario', 'rechazado_tech', 'rechazado_location', 'rechazado'];
 const SIN_MOTIVO = 'Sin motivo registrado';
+const MOTIVO_MAX = 120;
+const PAGE = 1000; // "Max Rows" de la API de Supabase
 
 // Mismo criterio que isPositionVisible/isCandidateVisible de ClientPortal:
 // la posición necesita su fila de visibilidad (candidate_id null) sin
@@ -40,6 +42,11 @@ function resumenPosicion(pos, apps, vis, now = Date.now()) {
   rechazados.forEach(a => {
     let m = a.rejection_motivo || SIN_MOTIVO;
     if (typeof m === 'object') m = m.motivo || m.label || SIN_MOTIVO;
+    // El cliente puede escribir el motivo desde el portal
+    // (portal-candidate-action), así que es texto no confiable: una sola
+    // línea y corto, para que no pueda meter un bloque de instrucciones en
+    // el prompt. Los motivos normales quedan igual.
+    m = String(m).replace(/\s+/g, ' ').trim().slice(0, MOTIVO_MAX) || SIN_MOTIVO;
     motivoMap[m] = (motivoMap[m] || 0) + 1;
   });
   return {
@@ -91,11 +98,23 @@ async function handler(req, res) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
   }
   const baseHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
-  const get = async (path) => {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: baseHeaders });
+  const get = async (path, range) => {
+    const headers = range ? { ...baseHeaders, 'Range-Unit': 'items', Range: range } : baseHeaders;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers });
     const data = await r.json();
     if (!r.ok) throw new Error(data?.message || `Supabase ${r.status}`);
     return data;
+  };
+  // Supabase corta cada respuesta en PAGE filas: se pide de a páginas
+  // hasta que una venga incompleta, así no se pierden candidatos ni filas
+  // de visibilidad en búsquedas grandes.
+  const getAll = async (path) => {
+    const rows = [];
+    for (let from = 0; ; from += PAGE) {
+      const page = await get(path, `${from}-${from + PAGE - 1}`);
+      rows.push(...page);
+      if (page.length < PAGE) return rows;
+    }
   };
 
   try {
@@ -107,8 +126,8 @@ async function handler(req, res) {
     // cliente da lo mismo que una que no existe.
     const [positions, vis, apps] = await Promise.all([
       get(`positions?id=eq.${position_id}&client_id=eq.${client.id}&select=id,role,opened_at,salary_band,jd_structured`),
-      get(`client_portal_visibility?client_id=eq.${client.id}&position_id=eq.${position_id}&select=candidate_id,visible`),
-      get(`applications?position_id=eq.${position_id}&select=candidate_id,status,rejection_motivo`),
+      getAll(`client_portal_visibility?client_id=eq.${client.id}&position_id=eq.${position_id}&select=candidate_id,visible&order=id`),
+      getAll(`applications?position_id=eq.${position_id}&select=candidate_id,status,rejection_motivo&order=id`),
     ]);
     const pos = positions[0];
     if (!pos || !posicionVisible(vis)) return res.status(404).json({ error: 'Posición no encontrada' });
@@ -129,15 +148,19 @@ async function handler(req, res) {
     if (!texto) return res.status(502).json({ error: 'La IA no devolvió texto' });
 
     const now = new Date().toISOString();
-    const saveResp = await fetch(`${SUPABASE_URL}/rest/v1/positions?id=eq.${pos.id}&client_id=eq.${client.id}`, {
+    const saveResp = await fetch(`${SUPABASE_URL}/rest/v1/positions?id=eq.${pos.id}&client_id=eq.${client.id}&select=id`, {
       method: 'PATCH',
-      headers: { ...baseHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      headers: { ...baseHeaders, 'Content-Type': 'application/json', Prefer: 'return=representation' },
       body: JSON.stringify({ ai_analysis: texto, ai_analysis_updated_at: now }),
     });
     if (!saveResp.ok) {
       console.error('portal-analysis: no se pudo guardar', saveResp.status, await saveResp.text());
       return res.status(500).json({ error: 'No se pudo guardar el análisis' });
     }
+    // Un PATCH que no matchea ninguna fila (la posición se borró o cambió
+    // de cliente entre la lectura y el guardado) igual da 200, con [].
+    const saved = await saveResp.json();
+    if (!Array.isArray(saved) || saved.length === 0) return res.status(404).json({ error: 'Posición no encontrada' });
 
     return res.status(200).json({ ai_analysis: texto, ai_analysis_updated_at: now });
   } catch (e) {
