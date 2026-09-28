@@ -1,0 +1,22 @@
+-- Paso 2 del arreglo de "users_public" (ver hwg_ats/migrations/
+-- 2026-09-28_users_public_view.sql para el contexto completo).
+--
+-- ⚠️ Correr recién después de que hwg_ats (rama users-sin-password-para-anon)
+-- esté deployado en producción — sus 8 lecturas directas de `users` pasan a
+-- leer `users_public`, que ya está creada y no necesita esta política para
+-- funcionar (una vista corre con los permisos de quien la creó, no de quien
+-- la consulta). Si esto se corre ANTES de ese deploy, esas 8 pantallas
+-- (dashboard, posiciones, portal de cliente, reportes, import) se quedan
+-- sin nombres/mails de recruiter hasta que el deploy nuevo salga.
+--
+-- Saca el acceso de la clave anónima a la tabla `users` por completo: la
+-- política "anon_select_users" (agregada para que esas 8 lecturas
+-- funcionaran sin login) no filtra columnas, así que además de nombre/mail
+-- dejaba pedir `password` — el hash bcrypt de cada usuario — a cualquiera
+-- con la clave pública del sitio.
+DROP POLICY IF EXISTS "anon_select_users" ON users;
+
+-- Con RLS ya habilitado (ver lockdown-users-table.sql) y sin ninguna
+-- política para 'anon', el acceso directo a `users` queda denegado por
+-- default. El login y las escrituras (crear/editar/borrar en "Equipo") ya
+-- pasaban por endpoints con la service key, así que no dependen de esto.
