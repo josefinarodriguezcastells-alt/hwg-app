@@ -9,7 +9,7 @@
 // cualquiera con la URL podía mandar mails a cualquier dirección desde la
 // casilla de HWG. El mensaje se escapa antes de ir al HTML.
 
-import { EMAIL_RE, escapeHtml, resolvePortalClient, clientRecruiters } from './_portal.js';
+import { EMAIL_RE, escapeHtml, resolvePortalClient, findClientRecruiter } from './_portal.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -32,8 +32,7 @@ export default async function handler(req, res) {
 
     const client = await resolvePortalClient(portal_token);
     if (!client) return res.status(403).json({ error: 'Portal inválido o inactivo' });
-    const recruiter = (await clientRecruiters(client.id))
-      .find(r => r.email.toLowerCase() === String(to).trim().toLowerCase());
+    const recruiter = await findClientRecruiter(client.id, to);
     if (!recruiter) return res.status(403).json({ error: 'Ese destinatario no es un recruiter de este cliente' });
 
     // Nombres desde la base, no del pedido.
