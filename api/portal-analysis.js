@@ -1,22 +1,23 @@
 // api/portal-analysis.js
 // "✨ Generar análisis" del portal de clientes (ClientPortal.jsx). El
-// cliente entra con PIN y no tiene sesión del ATS; se identifica con su
-// portal_token, igual que en portal-presentations.js.
+// cliente entra con PIN y no tiene sesión del ATS.
 //
 // Antes el portal armaba el prompt en el navegador y lo mandaba a
 // /api/analyze: con un link de portal real se podía mandar cualquier
-// prompt. Acá el navegador solo manda { portal_token, position_id }. El
-// servidor resuelve el cliente, verifica que la posición sea suya y esté
-// visible en el portal, calcula los datos, arma el prompt, llama a la IA
-// con modelo y largo fijos, y guarda positions.ai_analysis.
-//
+// prompt. Acá el navegador no manda prompt ni modelo, solo:
+// - portal_token y position_id, siempre;
+// - y además una credencial, sin la cual responde 401:
+//   - portal_pin: el PIN con el que el cliente entró, validado en la misma
+//     consulta a clients que el token (mismo criterio que tenía /api/analyze);
+//   - o la sesión del ATS de un owner (header Authorization): el owner entra
+//     al portal sin PIN, por el bypass de whoami.js.
 // El portal_token viaja en la URL del portal (/portal/:token), así que por
 // sí solo no prueba nada: quien tenga el link podría gastar IA y pisar el
-// análisis guardado. Hace falta además una de dos cosas:
-// - portal_pin: el PIN con el que el cliente entró, validado en la misma
-//   consulta a clients que el token (mismo criterio que tenía /api/analyze).
-// - La sesión del ATS de un owner (header Authorization): el owner entra al
-//   portal sin PIN, por el bypass de whoami.js.
+// análisis guardado.
+//
+// El servidor resuelve el cliente, verifica que la posición sea suya y esté
+// visible en el portal, calcula los datos, arma el prompt, llama a la IA
+// con modelo y largo fijos, y guarda positions.ai_analysis.
 
 const { requireRole } = require('./_auth');
 
