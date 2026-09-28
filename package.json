@@ -2,7 +2,7 @@
   "name": "hwg-candidate-app",
   "version": "1.0.0",
   "scripts": {
-    "test": "node --test test/ia-auth.test.mjs test/portal-analysis.test.mjs test/portal-mails.test.mjs test/portal-candidate-action.test.mjs test/notify-portal-feedback.test.mjs"
+    "test": "node --test test/ia-auth.test.mjs test/portal-analysis.test.mjs test/portal-mails.test.mjs test/extract-profile-provider.test.mjs test/factura.test.mjs test/portal-candidate-action.test.mjs test/notify-portal-feedback.test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
