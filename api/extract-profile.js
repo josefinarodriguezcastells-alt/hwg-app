@@ -76,11 +76,10 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Paso 1 de 3 para cerrar este endpoint (cuesta créditos de IA de HWG por
-  // uso y no pedía nada): si viene sesión del ATS se valida; si no viene,
-  // todavía se deja pasar porque el ATS en producción aún no la manda.
-  // Cuando el ATS que la manda esté deployado, pasa a exigirse siempre.
-  if (req.headers.authorization && !requireRole(req, res, ['owner', 'recruiter'])) return;
+  // Solo el ATS (owner o recruiter con sesión) puede usar este endpoint:
+  // cuesta créditos de IA de HWG por uso, y antes cualquiera con la URL lo
+  // podía llamar. El ATS manda la sesión desde hwg_ats#55.
+  if (!requireRole(req, res, ['owner', 'recruiter'])) return;
 
   try {
     const form = new formidable.IncomingForm({ maxFileSize: 10 * 1024 * 1024 });
