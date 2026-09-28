@@ -137,7 +137,7 @@ module.exports = async function handler(req, res) {
     // no prueba que quien llama pasó la pantalla de PIN. Esta es la acción
     // de más peso de las cuatro que lo necesitaban: rechaza un candidato
     // real o pide agendar, y manda un mail.
-    const client = await resolvePortalWriter(req, res, portal_token, portal_pin, { required: false }); // paso 1/3, ver _portal.js
+    const client = await resolvePortalWriter(req, res, portal_token, portal_pin); // paso 3/3: PIN exigido siempre, ver _portal.js
     if (!client) return;
 
     // La postulación tiene que pertenecer a una posición de ESTE cliente —
