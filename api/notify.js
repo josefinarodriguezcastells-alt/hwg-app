@@ -9,6 +9,7 @@
 // destinatarios son fijos y todo lo que escribe el cliente se escapa.
 
 import { escapeHtml, resolvePortalClient } from './_portal.js';
+import { requireRole } from './_auth.js';
 
 const RECIPIENTS = ['josie@hwgtalent.com', 'josefina.rodriguez.castells@gmail.com'];
 const clip = (v, n) => String(v ?? '').trim().slice(0, n);
@@ -16,10 +17,18 @@ const clip = (v, n) => String(v ?? '').trim().slice(0, n);
 export default async function handler(req, res) {
   // CORS — permite llamadas desde el portal y el ATS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // GET: a quién le llegan los pedidos — lo muestra Admin → Config en el
+  // ATS, así la lista vive en un solo lugar (RECIPIENTS). Solo owner: hay
+  // un mail personal en la lista.
+  if (req.method === 'GET') {
+    if (!requireRole(req, res, ['owner'])) return;
+    return res.status(200).json({ recipients: RECIPIENTS });
+  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

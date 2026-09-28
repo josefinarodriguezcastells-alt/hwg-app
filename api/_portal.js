@@ -38,8 +38,9 @@ async function findClientRecruiter(clientId, email) {
   if (!EMAIL_RE.test(wanted)) return null;
   // ilike trae candidatos sin distinguir mayúsculas; si el mail tiene _ o %
   // actúan de comodín y pueden traer de más, nunca de menos — por eso se
-  // filtra por igualdad exacta abajo en vez de escaparlos.
-  const users = await sbGet(`users?email=ilike.${encodeURIComponent(wanted)}&select=id,email,name&limit=50`);
+  // filtra por igualdad exacta abajo en vez de escaparlos. Sin limit: con
+  // un tope, los "de más" podían dejar afuera al mail exacto.
+  const users = await sbGet(`users?email=ilike.${encodeURIComponent(wanted)}&select=id,email,name`);
   const matches = users.filter(u => String(u.email || '').toLowerCase() === wanted);
   if (!matches.length) return null;
   const positions = await sbGet(`positions?client_id=eq.${encodeURIComponent(clientId)}&select=id`);

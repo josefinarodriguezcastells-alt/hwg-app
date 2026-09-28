@@ -8,11 +8,14 @@
 // Correr con: npm test   (o: node --test test/)
 
 import { test, beforeEach } from 'node:test';
+import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 
 process.env.SUPABASE_URL = 'https://fake.supabase.co';
 process.env.SUPABASE_SERVICE_KEY = 'svc-fake';
 process.env.RESEND_API_KEY = 're-fake';
+process.env.SESSION_SECRET = 'test-secret';
+const jwt = createRequire(import.meta.url)('jsonwebtoken');
 
 const DB = {
   clients: [
@@ -60,7 +63,7 @@ globalThis.fetch = async (url, opts = {}) => {
 const notify = (await import(new URL('../api/notify.js', import.meta.url))).default;
 const notifyMessage = (await import(new URL('../api/notify-message.js', import.meta.url))).default;
 
-async function call(handler, body) {
+async function call(handler, body, { method = 'POST', headers = {} } = {}) {
   const out = {};
   const res = {
     setHeader() {},
@@ -68,7 +71,7 @@ async function call(handler, body) {
     json(j) { out.body = j; return this; },
     end() { return this; },
   };
-  await handler({ method: 'POST', headers: {}, body }, res);
+  await handler({ method, headers, body }, res);
   return out;
 }
 
@@ -147,4 +150,30 @@ test('notify-message: recruiter del cliente (sin distinguir mayúsculas) → man
   assert.ok(mails[0].html.includes('Rec Uno'));
   assert.ok(!mails[0].html.includes('NOMBRE FALSO'));
   assert.ok(!mails[0].html.includes('<a href="https://evil.example"'));
+});
+
+test('notify-message: mail con "_" y muchos usuarios parecidos (comodín de ilike) → igual encuentra a la recruiter', async () => {
+  // 60 usuarios que el "_" de ilike también matchea (rec_a → recXa, recYa…)
+  // y la recruiter real al final: con un limit, quedaba afuera.
+  const extra = Array.from({ length: 60 }, (_, i) => ({ id: 'x' + i, email: `rec${String.fromCharCode(65 + (i % 26))}${i}a@hwgtalent.com`.replace(/\d+a@/, 'a@'), name: 'X' + i }));
+  DB.users.unshift(...extra);
+  DB.users.push({ id: 'u_', email: 'rec_a@hwgtalent.com', name: 'Rec Guion' });
+  DB.position_recruiters.push({ position_id: 'p1', recruiter_id: 'u_' });
+  try {
+    const r = await call(notifyMessage, msg({ to: 'rec_a@hwgtalent.com' }));
+    assert.equal(r.status, 200);
+    assert.deepEqual(mails[0].to, ['rec_a@hwgtalent.com', 'josie@hwgtalent.com']);
+  } finally {
+    DB.users.splice(0, extra.length); DB.users.pop(); DB.position_recruiters.pop();
+  }
+});
+
+test('notify GET (Admin → Config): solo owner ve la lista de destinatarios', async () => {
+  const bearer = (role) => ({ authorization: 'Bearer ' + jwt.sign({ id: 1, email: 'a@b.c', role }, 'test-secret') });
+  assert.equal((await call(notify, undefined, { method: 'GET' })).status, 401);
+  assert.equal((await call(notify, undefined, { method: 'GET', headers: bearer('recruiter') })).status, 403);
+  const r = await call(notify, undefined, { method: 'GET', headers: bearer('owner') });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.recipients, ['josie@hwgtalent.com', 'josefina.rodriguez.castells@gmail.com']);
+  assert.equal(mails.length, 0);
 });
