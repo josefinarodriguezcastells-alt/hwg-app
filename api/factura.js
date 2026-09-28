@@ -2,6 +2,16 @@
 // Recibe los datos de la factura como JSON en query param ?data=...
 // y devuelve un HTML/PDF con diseño HWG — sin dependencias externas
 
+// Auditoría de los 20 endpoints: este archivo armaba el HTML pegando el
+// texto de `data` directo, sin escapar nada — cualquiera podía armar un
+// link `/api/factura?data=<base64 con <script>...>` y mandarlo con la
+// marca de HWG. No hay login que lo tape (el link es "público" a propósito,
+// como el de un informe), así que la defensa tiene que ser acá: todo el
+// texto que viene de `data` se escapa antes de ir al HTML.
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -18,23 +28,42 @@ module.exports = async function handler(req, res) {
   }
 
   const {
-    numero = '—', tipo = 'embedded', mes = '', cliente = '',
-    entidad_nombre = '', entidad_direccion = '', entidad_cuit = '',
-    moneda = 'USD', total = 0, nota = '',
+    numero: numeroRaw = '—', tipo = 'embedded', mes = '', cliente: clienteRaw = '',
+    entidad_nombre: entidadNombreRaw = '', entidad_direccion: entidadDireccionRaw = '', entidad_cuit: entidadCuitRaw = '',
+    moneda: monedaRaw = 'USD', total = 0, nota: notaRaw = '',
     items = [],
     // Bancarios ARS
-    banco = '', cbu = '', alias = '',
+    banco: bancoRaw = '', cbu: cbuRaw = '', alias: aliasRaw = '',
     // Bancarios USD
-    bank_name = '', beneficiary = '', swift = '', aba = '', account_number = '',
+    bank_name: bankNameRaw = '', beneficiary: beneficiaryRaw = '', swift: swiftRaw = '', aba: abaRaw = '', account_number: accountNumberRaw = '',
     entidad_moneda = 'USD',
   } = factura;
+
+  // Todo lo que viene de `data` pasa por acá antes de tocar el HTML.
+  const numero = escapeHtml(numeroRaw);
+  const cliente = escapeHtml(clienteRaw);
+  const entidad_nombre = escapeHtml(entidadNombreRaw);
+  const entidad_direccion = escapeHtml(entidadDireccionRaw);
+  const entidad_cuit = escapeHtml(entidadCuitRaw);
+  const moneda = escapeHtml(monedaRaw);
+  const nota = escapeHtml(notaRaw);
+  const banco = escapeHtml(bancoRaw);
+  const cbu = escapeHtml(cbuRaw);
+  const alias = escapeHtml(aliasRaw);
+  const bank_name = escapeHtml(bankNameRaw);
+  const beneficiary = escapeHtml(beneficiaryRaw);
+  const swift = escapeHtml(swiftRaw);
+  const aba = escapeHtml(abaRaw);
+  const account_number = escapeHtml(accountNumberRaw);
 
   const mesLabel = (iso) => {
     if (!iso) return '';
     try {
       const d = new Date(iso + 'T12:00:00');
-      return d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
-    } catch(e) { return iso; }
+      const label = d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+      if (label === 'Invalid Date') return escapeHtml(iso);
+      return label;
+    } catch(e) { return escapeHtml(iso); }
   };
 
   const fechaEmision = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -42,11 +71,11 @@ module.exports = async function handler(req, res) {
   const itemRows = (Array.isArray(items) ? items : []).map(item => `
     <tr>
       <td style="padding:10px 0;font-size:13px;color:#111827;border-bottom:1px solid #f3f4f6;vertical-align:top;">
-        <div style="font-weight:500;">${item.texto || ''}</div>
-        ${item.detalle ? `<div style="font-size:11px;color:#6b7280;margin-top:2px;">${item.detalle}</div>` : ''}
+        <div style="font-weight:500;">${escapeHtml(item.texto)}</div>
+        ${item.detalle ? `<div style="font-size:11px;color:#6b7280;margin-top:2px;">${escapeHtml(item.detalle)}</div>` : ''}
       </td>
       <td style="padding:10px 0;font-size:13px;color:#111827;border-bottom:1px solid #f3f4f6;text-align:right;font-weight:500;white-space:nowrap;vertical-align:top;">
-        ${item.moneda || moneda} ${parseFloat(item.monto || 0).toLocaleString('es-AR')}
+        ${escapeHtml(item.moneda) || moneda} ${parseFloat(item.monto || 0).toLocaleString('es-AR')}
       </td>
     </tr>`).join('');
 
