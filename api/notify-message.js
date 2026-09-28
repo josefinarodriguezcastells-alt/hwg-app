@@ -9,12 +9,12 @@
 // cualquiera con la URL podía mandar mails a cualquier dirección desde la
 // casilla de HWG. El mensaje se escapa antes de ir al HTML.
 
-import { EMAIL_RE, escapeHtml, resolvePortalClient, findClientRecruiter } from './_portal.js';
+import { EMAIL_RE, escapeHtml, resolvePortalWriter, findClientRecruiter } from './_portal.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { portal_token, to, fromEmail, message } = req.body || {};
+    const { portal_token, portal_pin, to, fromEmail, message } = req.body || {};
 
     const text = String(message ?? '').trim().slice(0, 5000);
     const from = String(fromEmail ?? '').trim();
@@ -30,8 +30,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Faltan datos (to, fromEmail, message)' });
     }
 
-    const client = await resolvePortalClient(portal_token);
-    if (!client) return res.status(403).json({ error: 'Portal inválido o inactivo' });
+    const client = await resolvePortalWriter(req, res, portal_token, portal_pin, { required: false }); // paso 1/3, ver _portal.js
+    if (!client) return;
     const recruiter = await findClientRecruiter(client.id, to);
     if (!recruiter) return res.status(403).json({ error: 'Ese destinatario no es un recruiter de este cliente' });
 

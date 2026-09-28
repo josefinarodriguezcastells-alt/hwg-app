@@ -8,7 +8,7 @@
 // la marca de HWG. Ahora el cliente se resuelve del token, los
 // destinatarios son fijos y todo lo que escribe el cliente se escapa.
 
-import { escapeHtml, resolvePortalClient } from './_portal.js';
+import { escapeHtml, resolvePortalWriter } from './_portal.js';
 import { requireRole } from './_auth.js';
 
 const RECIPIENTS = ['josie@hwgtalent.com', 'josefina.rodriguez.castells@gmail.com'];
@@ -36,6 +36,7 @@ export default async function handler(req, res) {
   try {
     const {
       portal_token,
+      portal_pin,
       title,
       seniority,
       location,
@@ -49,8 +50,8 @@ export default async function handler(req, res) {
     } = req.body || {};
 
     if (!clip(title, 200)) return res.status(400).json({ error: 'Falta el título de la posición' });
-    const client = await resolvePortalClient(portal_token);
-    if (!client) return res.status(403).json({ error: 'Portal inválido o inactivo' });
+    const client = await resolvePortalWriter(req, res, portal_token, portal_pin, { required: false }); // paso 1/3, ver _portal.js
+    if (!client) return;
     const clientName = escapeHtml(client.name);
 
     const RESEND_API_KEY = process.env.RESEND_API_KEY;

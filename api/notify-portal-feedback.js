@@ -18,6 +18,8 @@
 // nota más reciente YA guardada en client_portal_notes. El mail solo
 // puede reflejar lo que de verdad quedó persistido.
 
+const { resolvePortalWriter } = require('./_portal');
+
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -96,11 +98,11 @@ function buildEmailHtml(t, kind, candidateName, positionRole, clientName, detail
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { portal_token, application_id, kind, lang } = req.body || {};
+  const { portal_token, portal_pin, application_id, kind, lang } = req.body || {};
   if (!portal_token || !application_id || !['comment', 'rating'].includes(kind)) {
     return res.status(400).json({ error: 'Faltan datos (portal_token, application_id, kind)' });
   }
@@ -121,22 +123,25 @@ module.exports = async function handler(req, res) {
   }
   const baseHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' };
 
+  // portal_pin o la sesión del owner — mismo criterio que portal-analysis
+  // (hwg-app#19/#20): portal_token solo, que viaja en la URL del portal, no
+  // prueba que quien llama pasó la pantalla de PIN. Fuera del try de abajo
+  // (Greptile): ese try termina en un catch "best-effort" pensado para
+  // cuando falla el ENVÍO del mail (el dato del cliente ya está guardado, no
+  // hay que romper la UI por eso) — antes, si esta resolución tiraba una
+  // excepción (ej. Supabase caído), caía en ese mismo catch y respondía
+  // 200 {mailFailed:true}, como si el problema fuera el envío y no que ni
+  // siquiera se pudo validar el portal.
+  let client;
   try {
-    // Mismo criterio defensivo que portal-candidate-action.js: no confiar en
-    // portal_token solo — hay que confirmar que el cliente sigue activo.
-    const clientResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/clients?portal_token=eq.${encodeURIComponent(portal_token)}&portal_active=eq.true&select=id,name`,
-      { headers: baseHeaders }
-    );
-    if (!clientResp.ok) {
-      const errBody = await clientResp.json().catch(() => ({}));
-      console.error('notify-portal-feedback: clients query failed', errBody);
-      return res.status(clientResp.status).json({ error: errBody });
-    }
-    const clientRows = await clientResp.json();
-    const client = Array.isArray(clientRows) ? clientRows[0] : null;
-    if (!client) return res.status(403).json({ error: 'Portal inválido' });
+    client = await resolvePortalWriter(req, res, portal_token, portal_pin, { required: false }); // paso 1/3, ver _portal.js
+  } catch (e) {
+    console.error('notify-portal-feedback: resolvePortalWriter error:', e);
+    return res.status(500).json({ error: 'Error validando el portal' });
+  }
+  if (!client) return;
 
+  try {
     // La postulación tiene que pertenecer a una posición de ESTE cliente —
     // se resuelve con un join, no se confía en ningún dato que mande el
     // caller aparte del portal_token y el application_id (mismo criterio

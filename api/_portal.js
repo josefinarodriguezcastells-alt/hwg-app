@@ -3,6 +3,8 @@
 // cliente (clients.portal_token, con portal_active=true). Nunca se confía
 // en nombres, ids ni mails que mande el portal — se resuelven acá.
 
+const { requireRole } = require('./_auth');
+
 const EMAIL_RE = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]+$/;
 
 function escapeHtml(str) {
@@ -21,11 +23,63 @@ async function sbGet(path) {
   return data;
 }
 
-// Cliente {id, name} de un portal activo, o null.
-async function resolvePortalClient(portalToken) {
+// Cliente {id, name} de un portal activo, o null. `portalPin`, si viene, se
+// suma al filtro — ver resolvePortalWriter, que es quien decide cuándo
+// hace falta.
+async function resolvePortalClient(portalToken, portalPin) {
   if (typeof portalToken !== 'string' || !portalToken) return null;
-  const rows = await sbGet(`clients?portal_token=eq.${encodeURIComponent(portalToken)}&portal_active=eq.true&select=id,name`);
+  const pinFilter = portalPin ? `&portal_pin=eq.${encodeURIComponent(portalPin)}` : '';
+  const rows = await sbGet(`clients?portal_token=eq.${encodeURIComponent(portalToken)}${pinFilter}&portal_active=eq.true&select=id,name`);
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+// Auditoría de los 20 endpoints: portal-candidate-action, notify-message,
+// notify-portal-feedback y notify (POST) escriben datos reales o mandan
+// mails con la marca de HWG confiando solo en portal_token — que viaja en
+// la URL del portal (/portal/:token), así que por sí solo no prueba que
+// quien llama pasó la pantalla de PIN (mismo hallazgo que ya se cerró para
+// portal-analysis, hwg-app#19/#20). Este helper aplica el mismo criterio a
+// los cuatro: portal_pin (el que el cliente tipeó al entrar) o la sesión
+// del ATS de un owner (que entra al portal por el bypass de whoami, sin
+// PIN). Devuelve el cliente {id,name} si es válido; si no, ya mandó la
+// respuesta de error (401 sin PIN, 400 con portal_pin mal armado, 403 con
+// credenciales que no matchean) y el caller tiene que cortar.
+//
+// `required` (Greptile en hwg-app#25): igual que hizo hwg-app#13 con los
+// endpoints de IA, esto se cierra en 3 pasos para no cortar producción. Con
+// `required: false` (paso 1, este PR), si no viene PIN ni sesión de owner
+// se cae al criterio viejo (portal_token solo) en vez de rechazar — así
+// las 4 acciones del portal siguen andando con el frontend actual mientras
+// se deploya el que manda el PIN (hwg_ats#64). Recién en el paso 3 (PR
+// aparte, cuando el paso 2 ya esté en producción) los 4 callers pasan a
+// `required: true` (el default) y ahí sí un pedido sin PIN se rechaza.
+async function resolvePortalWriter(req, res, portalToken, portalPin, { required = true } = {}) {
+  if (req.headers.authorization) {
+    if (!requireRole(req, res, ['owner'])) return null;
+    const client = await resolvePortalClient(portalToken);
+    if (!client) { res.status(403).json({ error: 'Portal inválido' }); return null; }
+    return client;
+  }
+  if (portalPin == null || portalPin === '') {
+    if (!required) return resolvePortalClientOrReject(res, portalToken);
+    res.status(401).json({ error: 'Falta el PIN del portal' });
+    return null;
+  }
+  if (typeof portalPin !== 'string') {
+    res.status(400).json({ error: 'portal_pin inválido' });
+    return null;
+  }
+  const client = await resolvePortalClient(portalToken, portalPin);
+  if (!client) { res.status(403).json({ error: 'Portal o PIN inválido' }); return null; }
+  return client;
+}
+
+// Paso 1 (ver arriba): mismo camino que tenían los 4 endpoints antes de
+// este PR — portal_token solo, sin pedir PIN.
+async function resolvePortalClientOrReject(res, portalToken) {
+  const client = await resolvePortalClient(portalToken);
+  if (!client) { res.status(403).json({ error: 'Portal inválido' }); return null; }
+  return client;
 }
 
 // Recruiter {email, name} asignado a alguna posición del cliente cuyo mail
@@ -53,4 +107,4 @@ async function findClientRecruiter(clientId, email) {
   return null;
 }
 
-module.exports = { EMAIL_RE, escapeHtml, resolvePortalClient, findClientRecruiter };
+module.exports = { EMAIL_RE, escapeHtml, resolvePortalClient, resolvePortalWriter, findClientRecruiter };
