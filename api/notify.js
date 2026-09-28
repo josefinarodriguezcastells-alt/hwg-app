@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     } = req.body || {};
 
     if (!clip(title, 200)) return res.status(400).json({ error: 'Falta el título de la posición' });
-    const client = await resolvePortalWriter(req, res, portal_token, portal_pin, { required: false }); // paso 1/3, ver _portal.js
+    const client = await resolvePortalWriter(req, res, portal_token, portal_pin); // paso 3/3: PIN exigido siempre, ver _portal.js
     if (!client) return;
     const clientName = escapeHtml(client.name);
 

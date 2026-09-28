@@ -115,16 +115,10 @@ test('preflight', async () => {
 
 // ── Acceso: el foco de este archivo ────────────────────────────────────────
 
-// Paso 1/3 (Greptile en #25): con required:false (api/_portal.js), sin PIN
-// ni sesión todavía funciona con el token solo — igual que antes de este
-// PR — mientras el ATS que manda el PIN (hwg_ats#64) termina de
-// deployarse, para no dejar sin poder rechazar/agendar a los clientes en
-// el medio. El paso 3 (aparte) pasa a required:true y este caso vuelve a
-// dar 401.
-test('sin PIN ni sesión: todavía funciona con el token solo (paso 1/3 — required:false)', async () => {
+test('sin PIN ni sesión → 401, no toca applications', async () => {
   const r = await call(req({ portal_pin: undefined }));
-  assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.equal(applications[0].status, 'rechazado');
+  assert.equal(r.status, 401);
+  assert.equal(applications[0].status, 'submitted');
 });
 
 test('sin portal_token → 400 (esto sí se exige siempre, con o sin PIN)', async () => {

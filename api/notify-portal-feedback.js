@@ -134,7 +134,7 @@ module.exports = async function handler(req, res) {
   // siquiera se pudo validar el portal.
   let client;
   try {
-    client = await resolvePortalWriter(req, res, portal_token, portal_pin, { required: false }); // paso 1/3, ver _portal.js
+    client = await resolvePortalWriter(req, res, portal_token, portal_pin); // paso 3/3: PIN exigido siempre, ver _portal.js
   } catch (e) {
     console.error('notify-portal-feedback: resolvePortalWriter error:', e);
     return res.status(500).json({ error: 'Error validando el portal' });

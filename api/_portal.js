@@ -45,15 +45,12 @@ async function resolvePortalClient(portalToken, portalPin) {
 // respuesta de error (401 sin PIN, 400 con portal_pin mal armado, 403 con
 // credenciales que no matchean) y el caller tiene que cortar.
 //
-// `required` (Greptile en hwg-app#25): igual que hizo hwg-app#13 con los
-// endpoints de IA, esto se cierra en 3 pasos para no cortar producción. Con
-// `required: false` (paso 1, este PR), si no viene PIN ni sesión de owner
-// se cae al criterio viejo (portal_token solo) en vez de rechazar — así
-// las 4 acciones del portal siguen andando con el frontend actual mientras
-// se deploya el que manda el PIN (hwg_ats#64). Recién en el paso 3 (PR
-// aparte, cuando el paso 2 ya esté en producción) los 4 callers pasan a
-// `required: true` (el default) y ahí sí un pedido sin PIN se rechaza.
-async function resolvePortalWriter(req, res, portalToken, portalPin, { required = true } = {}) {
+// Se cerró en 3 pasos para no cortar producción (hwg-app#25 tuvo un
+// `required: false` transitorio mientras hwg_ats#64 —el frontend que manda
+// el PIN— terminaba de deployarse). Confirmado en producción, así que este
+// paso 3 saca el flag: ahora un pedido sin PIN ni sesión de owner se
+// rechaza siempre.
+async function resolvePortalWriter(req, res, portalToken, portalPin) {
   if (req.headers.authorization) {
     if (!requireRole(req, res, ['owner'])) return null;
     const client = await resolvePortalClient(portalToken);
@@ -61,7 +58,6 @@ async function resolvePortalWriter(req, res, portalToken, portalPin, { required 
     return client;
   }
   if (portalPin == null || portalPin === '') {
-    if (!required) return resolvePortalClientOrReject(res, portalToken);
     res.status(401).json({ error: 'Falta el PIN del portal' });
     return null;
   }
@@ -71,14 +67,6 @@ async function resolvePortalWriter(req, res, portalToken, portalPin, { required 
   }
   const client = await resolvePortalClient(portalToken, portalPin);
   if (!client) { res.status(403).json({ error: 'Portal o PIN inválido' }); return null; }
-  return client;
-}
-
-// Paso 1 (ver arriba): mismo camino que tenían los 4 endpoints antes de
-// este PR — portal_token solo, sin pedir PIN.
-async function resolvePortalClientOrReject(res, portalToken) {
-  const client = await resolvePortalClient(portalToken);
-  if (!client) { res.status(403).json({ error: 'Portal inválido' }); return null; }
   return client;
 }
 

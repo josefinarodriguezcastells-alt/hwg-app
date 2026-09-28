@@ -99,12 +99,10 @@ test('preflight', async () => {
 
 // ── Acceso ──────────────────────────────────────────────────────────────
 
-// Paso 1/3 (Greptile en #25) — ver el comentario largo en
-// test/portal-candidate-action.test.mjs.
-test('sin PIN ni sesión: todavía funciona con el token solo (paso 1/3 — required:false)', async () => {
+test('sin PIN ni sesión → 401, no manda mail', async () => {
   const r = await call(req({ portal_pin: undefined }));
-  assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.equal(mails.length, 1);
+  assert.equal(r.status, 401);
+  assert.equal(mails.length, 0);
 });
 
 test('PIN incorrecto → 403, no manda mail', async () => {

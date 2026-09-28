@@ -30,7 +30,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Faltan datos (to, fromEmail, message)' });
     }
 
-    const client = await resolvePortalWriter(req, res, portal_token, portal_pin, { required: false }); // paso 1/3, ver _portal.js
+    const client = await resolvePortalWriter(req, res, portal_token, portal_pin); // paso 3/3: PIN exigido siempre, ver _portal.js
     if (!client) return;
     const recruiter = await findClientRecruiter(client.id, to);
     if (!recruiter) return res.status(403).json({ error: 'Ese destinatario no es un recruiter de este cliente' });
