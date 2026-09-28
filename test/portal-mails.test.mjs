@@ -19,9 +19,9 @@ const jwt = createRequire(import.meta.url)('jsonwebtoken');
 
 const DB = {
   clients: [
-    { id: 'c1', name: 'Acme & Co', portal_token: 'PORTAL_OK', portal_active: true },
-    { id: 'c2', name: 'Inactivo', portal_token: 'PORTAL_INACTIVO', portal_active: false },
-    { id: 'c3', name: 'Otro cliente', portal_token: 'PORTAL_OTRO', portal_active: true },
+    { id: 'c1', name: 'Acme & Co', portal_token: 'PORTAL_OK', portal_pin: '1234', portal_active: true },
+    { id: 'c2', name: 'Inactivo', portal_token: 'PORTAL_INACTIVO', portal_pin: '1234', portal_active: false },
+    { id: 'c3', name: 'Otro cliente', portal_token: 'PORTAL_OTRO', portal_pin: '5678', portal_active: true },
   ],
   positions: [{ id: 'p1', client_id: 'c1' }, { id: 'p3', client_id: 'c3' }],
   position_recruiters: [{ position_id: 'p1', recruiter_id: 'u1' }, { position_id: 'p3', recruiter_id: 'u3' }],
@@ -80,22 +80,54 @@ const EVIL = '<a href="https://evil.example">clic</a>';
 beforeEach(() => { mails = []; });
 
 // ── notify (pedido de posición) ───────────────────────────────────────────
+//
+// Auditoría de los 20 endpoints: portal_token solo (viaja en la URL del
+// portal) no prueba que quien llama pasó la pantalla de PIN — mismo
+// hallazgo ya cerrado en portal-analysis (hwg-app#19/#20), extendido acá a
+// los 4 endpoints de escritura del portal con resolvePortalWriter
+// (api/_portal.js): hace falta portal_pin, o la sesión del ATS de un owner.
 
-test('notify: sin portal_token → 403 y no manda mail', async () => {
+const bearer = (role) => ({ authorization: 'Bearer ' + jwt.sign({ id: 1, email: 'a@b.c', role }, 'test-secret') });
+
+test('notify: sin portal_token ni PIN → 401 y no manda mail', async () => {
   const r = await call(notify, { title: 'Dev' });
+  assert.equal(r.status, 401);
+  assert.equal(mails.length, 0);
+});
+
+test('notify: portal_token sin PIN → 401 y no manda mail (el token solo no alcanza)', async () => {
+  const r = await call(notify, { portal_token: 'PORTAL_OK', title: 'Dev' });
+  assert.equal(r.status, 401);
+  assert.equal(mails.length, 0);
+});
+
+test('notify: PIN incorrecto → 403 y no manda mail', async () => {
+  const r = await call(notify, { portal_token: 'PORTAL_OK', portal_pin: '0000', title: 'Dev' });
   assert.equal(r.status, 403);
   assert.equal(mails.length, 0);
 });
 
-test('notify: portal inactivo → 403 y no manda mail', async () => {
-  const r = await call(notify, { portal_token: 'PORTAL_INACTIVO', title: 'Dev' });
+test('notify: portal inactivo (con PIN correcto de esa fila) → 403 y no manda mail', async () => {
+  const r = await call(notify, { portal_token: 'PORTAL_INACTIVO', portal_pin: '1234', title: 'Dev' });
+  assert.equal(r.status, 403);
+  assert.equal(mails.length, 0);
+});
+
+test('notify: sesión del owner sin PIN también sirve (bypass del portal)', async () => {
+  const r = await call(notify, { portal_token: 'PORTAL_OK', title: 'Dev' }, { headers: bearer('owner') });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(mails.length, 1);
+});
+
+test('notify: sesión de recruiter (no owner) no alcanza — el bypass del portal es solo para el owner', async () => {
+  const r = await call(notify, { portal_token: 'PORTAL_OK', title: 'Dev' }, { headers: bearer('recruiter') });
   assert.equal(r.status, 403);
   assert.equal(mails.length, 0);
 });
 
 test('notify: destinatarios fijos, cliente de la base, HTML escapado', async () => {
   const r = await call(notify, {
-    portal_token: 'PORTAL_OK', title: 'Dev ' + EVIL, jd_text: EVIL,
+    portal_token: 'PORTAL_OK', portal_pin: '1234', title: 'Dev ' + EVIL, jd_text: EVIL,
     clientName: 'NOMBRE FALSO', notification_email: 'atacante@evil.example',
   });
   assert.equal(r.status, 200);
@@ -109,18 +141,36 @@ test('notify: destinatarios fijos, cliente de la base, HTML escapado', async () 
 
 // ── notify-message (mensaje al recruiter) ─────────────────────────────────
 
-const msg = (extra) => ({ portal_token: 'PORTAL_OK', to: 'rec.uno@hwgtalent.com', fromEmail: 'hm@acme.example', message: 'hola', ...extra });
+const msg = (extra) => ({ portal_token: 'PORTAL_OK', portal_pin: '1234', to: 'rec.uno@hwgtalent.com', fromEmail: 'hm@acme.example', message: 'hola', ...extra });
 
-test('notify-message: sin portal_token → 403 y no manda mail', async () => {
-  const r = await call(notifyMessage, msg({ portal_token: undefined }));
+test('notify-message: sin portal_token ni PIN → 401 y no manda mail', async () => {
+  const r = await call(notifyMessage, msg({ portal_token: undefined, portal_pin: undefined }));
+  assert.equal(r.status, 401);
+  assert.equal(mails.length, 0);
+});
+
+test('notify-message: portal_token sin PIN → 401 y no manda mail', async () => {
+  const r = await call(notifyMessage, msg({ portal_pin: undefined }));
+  assert.equal(r.status, 401);
+  assert.equal(mails.length, 0);
+});
+
+test('notify-message: PIN incorrecto → 403 y no manda mail', async () => {
+  const r = await call(notifyMessage, msg({ portal_pin: '0000' }));
   assert.equal(r.status, 403);
   assert.equal(mails.length, 0);
 });
 
-test('notify-message: portal inactivo → 403 y no manda mail', async () => {
+test('notify-message: portal inactivo (con PIN correcto de esa fila) → 403 y no manda mail', async () => {
   const r = await call(notifyMessage, msg({ portal_token: 'PORTAL_INACTIVO' }));
   assert.equal(r.status, 403);
   assert.equal(mails.length, 0);
+});
+
+test('notify-message: sesión del owner sin PIN también sirve', async () => {
+  const r = await call(notifyMessage, msg({ portal_pin: undefined }), { headers: bearer('owner') });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(mails.length, 1);
 });
 
 test('notify-message: destinatario ajeno (no es recruiter) → 403 y no manda mail', async () => {
@@ -169,7 +219,6 @@ test('notify-message: mail con "_" y muchos usuarios parecidos (comodín de ilik
 });
 
 test('notify GET (Admin → Config): solo owner ve la lista de destinatarios', async () => {
-  const bearer = (role) => ({ authorization: 'Bearer ' + jwt.sign({ id: 1, email: 'a@b.c', role }, 'test-secret') });
   assert.equal((await call(notify, undefined, { method: 'GET' })).status, 401);
   assert.equal((await call(notify, undefined, { method: 'GET', headers: bearer('recruiter') })).status, 403);
   const r = await call(notify, undefined, { method: 'GET', headers: bearer('owner') });

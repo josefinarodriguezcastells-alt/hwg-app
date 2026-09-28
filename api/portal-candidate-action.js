@@ -13,6 +13,8 @@
 // (application_id) pertenezca a una posición de ESE cliente antes de
 // tocar nada — mismo criterio que portal-presentations.js.
 
+const { resolvePortalWriter } = require('./_portal');
+
 const REJECTED_STATUS = 'rechazado';
 const SCHEDULE_STATUS = 'entrevista_cliente_fit';
 // Solo se puede Rechazar/Agendar mientras la postulación está esperando una
@@ -109,11 +111,11 @@ function buildEmailHtml(t, action, candidateName, positionRole, clientName, deta
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { portal_token, application_id, action, text, lang } = req.body || {};
+  const { portal_token, portal_pin, application_id, action, text, lang } = req.body || {};
   if (!portal_token || !application_id || !['reject', 'schedule'].includes(action)) {
     return res.status(400).json({ error: 'Faltan datos (portal_token, application_id, action)' });
   }
@@ -130,14 +132,13 @@ module.exports = async function handler(req, res) {
   const baseHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' };
 
   try {
-    const clientResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/clients?portal_token=eq.${encodeURIComponent(portal_token)}&portal_active=eq.true&select=id,name`,
-      { headers: baseHeaders }
-    );
-    const clientRows = await clientResp.json();
-    if (!clientResp.ok) return res.status(clientResp.status).json({ error: clientRows });
-    const client = Array.isArray(clientRows) ? clientRows[0] : null;
-    if (!client) return res.status(403).json({ error: 'Portal inválido' });
+    // portal_pin o la sesión del owner — mismo criterio que portal-analysis
+    // (hwg-app#19/#20): portal_token solo, que viaja en la URL del portal,
+    // no prueba que quien llama pasó la pantalla de PIN. Esta es la acción
+    // de más peso de las cuatro que lo necesitaban: rechaza un candidato
+    // real o pide agendar, y manda un mail.
+    const client = await resolvePortalWriter(req, res, portal_token, portal_pin);
+    if (!client) return;
 
     // La postulación tiene que pertenecer a una posición de ESTE cliente —
     // se resuelve con un join, no se confía en el application_id solo.
