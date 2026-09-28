@@ -11,7 +11,10 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+const jwt = require('jsonwebtoken');
 
+const SECRET = 'test-secret';
+process.env.SESSION_SECRET = SECRET;
 process.env.ANTHROPIC_API_KEY = 'sk-fake';
 process.env.SUPABASE_URL = 'https://fake.supabase.co';
 process.env.SUPABASE_SERVICE_KEY = 'svc-fake';
@@ -22,9 +25,11 @@ process.env.SUPABASE_SERVICE_KEY = 'svc-fake';
 // false", así que sacar el filtro portal_active=eq.true del código real no
 // hacía fallar ningún test).
 const CLIENTS = [
-  { id: 'c1', portal_token: 'PORTAL_OK', portal_active: true },
-  { id: 'c9', portal_token: 'PORTAL_INACTIVO', portal_active: false },
+  { id: 'c1', portal_token: 'PORTAL_OK', portal_pin: '1234', portal_active: true },
+  { id: 'c9', portal_token: 'PORTAL_INACTIVO', portal_pin: '1234', portal_active: false },
 ];
+const PIN = '1234';
+const sesion = (role) => 'Bearer ' + jwt.sign({ id: 'u1', email: 'u@hwg.test', role }, SECRET);
 
 const P1 = '11111111-1111-4111-8111-111111111111'; // posición del cliente c1, visible
 const P2 = '22222222-2222-4222-8222-222222222222'; // posición de otro cliente
@@ -39,6 +44,10 @@ const VISIBILITY = [
   { client_id: 'c1', position_id: P1, candidate_id: null, visible: true },
   { client_id: 'c1', position_id: P1, candidate_id: 'k-oculto', visible: false },
   { client_id: 'c1', position_id: P3, candidate_id: null, visible: false },
+  // Fila vieja: P2 ahora es de otro cliente, pero c1 conserva su fila de
+  // visibilidad. Sin esto, sacar client_id del filtro de positions no hacía
+  // fallar ningún test (la visibilidad sola ya daba 404).
+  { client_id: 'c1', position_id: P2, candidate_id: null, visible: true },
 ];
 const APPS = [
   { position_id: P1, candidate_id: 'k1', status: 'submitted', rejection_motivo: null },
@@ -73,6 +82,17 @@ const q = (url, key) => new URL(url).searchParams.get(key);
 const eq = (url, key) => (q(url, key) || '').replace(/^eq\./, '');
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status });
 
+// Aplica los filtros de la URL como PostgREST (eq. e is.null), así sacar un
+// filtro del código real (portal_pin, portal_active, client_id...) cambia
+// lo que devuelve el mock y hace fallar algún test. Un operador que el mock
+// no conoce corta el test en vez de ignorarse.
+const matches = (url) => (row) => [...new URL(url).searchParams].every(([k, v]) => {
+  if (k === 'select' || k === 'order') return true;
+  if (v === 'is.null') return row[k] == null;
+  if (v.startsWith('eq.')) return String(row[k]) === v.slice(3);
+  throw new Error(`filtro no soportado por el mock: ${k}=${v}`);
+});
+
 globalThis.fetch = async (url, opts = {}) => {
   url = String(url);
   if (url.startsWith('http://127.0.0.1')) return realFetch(url, opts);
@@ -85,20 +105,13 @@ globalThis.fetch = async (url, opts = {}) => {
     if (opts.method === 'PATCH') {
       calls.patch.push({ url, body: JSON.parse(opts.body) });
       if (saveStatus !== 200) return json({ message: 'fallo' }, saveStatus);
-      return json(saveRows ?? POSITIONS.filter(p => p.id === eq(url, 'id') && p.client_id === eq(url, 'client_id')).map(p => ({ id: p.id })));
+      return json(saveRows ?? POSITIONS.filter(matches(url)).map(p => ({ id: p.id })));
     }
-    calls.supabase.push({ table, select: q(url, 'select') });
-    if (table === 'clients') {
-      // Aplica portal_active=eq.true de verdad (no solo matchea el token):
-      // si el código real dejara de filtrar por portal_active, este mock
-      // seguiría devolviendo el cliente inactivo y el test de abajo fallaría.
-      const cl = CLIENTS.find(c => c.portal_token === eq(url, 'portal_token'));
-      const activo = q(url, 'portal_active') === 'eq.true';
-      return json(cl && activo && cl.portal_active ? [{ id: cl.id }] : []);
-    }
-    if (table === 'positions') return json(POSITIONS.filter(p => p.id === eq(url, 'id') && p.client_id === eq(url, 'client_id')));
-    if (table === 'client_portal_visibility') return json(paged(VISIBILITY.filter(v => v.client_id === eq(url, 'client_id') && v.position_id === eq(url, 'position_id')), opts));
-    if (table === 'applications') return json(paged([...APPS, ...extraApps].filter(a => a.position_id === eq(url, 'position_id')), opts));
+    calls.supabase.push({ table, select: q(url, 'select'), url });
+    if (table === 'clients') return json(CLIENTS.filter(matches(url)).map(c => ({ id: c.id })));
+    if (table === 'positions') return json(POSITIONS.filter(matches(url)));
+    if (table === 'client_portal_visibility') return json(paged(VISIBILITY.filter(matches(url)), opts));
+    if (table === 'applications') return json(paged([...APPS, ...extraApps].filter(matches(url)), opts));
   }
   throw new Error('fetch no mockeado: ' + url);
 };
@@ -119,14 +132,16 @@ before(async () => {
 });
 after(() => server.close());
 
-async function post(body) {
-  const r = await realFetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+async function post(body, auth) {
+  const headers = { 'Content-Type': 'application/json', ...(auth ? { Authorization: auth } : {}) };
+  const r = await realFetch(base, { method: 'POST', headers, body: JSON.stringify(body) });
   return { status: r.status, body: await r.json() };
 }
 
-test('preflight', async () => {
+test('preflight: deja pasar Authorization (la sesión del owner)', async () => {
   const r = await realFetch(base, { method: 'OPTIONS' });
   assert.equal(r.status, 200);
+  assert.match(r.headers.get('access-control-allow-headers'), /Authorization/);
 });
 
 test('GET → 405', async () => {
@@ -149,28 +164,96 @@ for (const [label, body] of [
 }
 
 test('portal_token que no existe → 403 sin llegar a la IA', async () => {
-  const r = await post({ portal_token: 'NOPE', position_id: P1 });
+  const r = await post({ portal_token: 'NOPE', portal_pin: PIN, position_id: P1 });
   assert.equal(r.status, 403);
   assert.equal(calls.ai.length, 0);
   assert.equal(calls.patch.length, 0);
 });
 
 test('portal_token de un cliente que existe pero está desactivado → 403 sin llegar a la IA', async () => {
-  const r = await post({ portal_token: 'PORTAL_INACTIVO', position_id: P1 });
+  const r = await post({ portal_token: 'PORTAL_INACTIVO', portal_pin: PIN, position_id: P1 });
   assert.equal(r.status, 403);
   assert.equal(calls.ai.length, 0);
   assert.equal(calls.patch.length, 0);
 });
 
+test('el PIN se valida en la misma consulta que el token y portal_active', async () => {
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const cq = calls.supabase.filter(c => c.table === 'clients');
+  assert.equal(cq.length, 1);
+  assert.equal(q(cq[0].url, 'portal_token'), 'eq.PORTAL_OK');
+  assert.equal(q(cq[0].url, 'portal_pin'), `eq.${PIN}`);
+  assert.equal(q(cq[0].url, 'portal_active'), 'eq.true');
+});
+
+test('PIN incorrecto → 403 sin llegar a la IA ni guardar', async () => {
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: '9999', position_id: P1 });
+  assert.equal(r.status, 403);
+  assert.equal(r.body.error, 'Portal o PIN inválido');
+  assert.equal(calls.ai.length, 0);
+  assert.equal(calls.patch.length, 0);
+  assert.equal(calls.supabase.filter(c => c.table !== 'clients').length, 0);
+});
+
+test('PIN que no es string → 400 sin tocar la base', async () => {
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: ['1234'], position_id: P1 });
+  assert.equal(r.status, 400);
+  assert.equal(calls.supabase.length, 0);
+  assert.equal(calls.ai.length, 0);
+});
+
+// Paso 1 de 3: el portal en producción todavía no manda el PIN, así que
+// sin PIN ni sesión se sigue aceptando solo el token. El paso 3 da vuelta
+// este test (401 sin llegar a la base).
+test('sin PIN ni sesión: todavía pasa con el token solo (paso 1 de 3)', async () => {
+  const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const cq = calls.supabase.find(c => c.table === 'clients');
+  assert.equal(q(cq.url, 'portal_pin'), null);
+  assert.equal(q(cq.url, 'portal_active'), 'eq.true');
+});
+
+test('owner con sesión del ATS, sin PIN (bypass del portal) → 200', async () => {
+  const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 }, sesion('owner'));
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(calls.ai.length, 1);
+  assert.equal(calls.patch.length, 1);
+  const cq = calls.supabase.find(c => c.table === 'clients');
+  assert.equal(q(cq.url, 'portal_pin'), null);
+  assert.equal(q(cq.url, 'portal_active'), 'eq.true');
+});
+
+test('owner con sesión pero portal desactivado → 403', async () => {
+  const r = await post({ portal_token: 'PORTAL_INACTIVO', position_id: P1 }, sesion('owner'));
+  assert.equal(r.status, 403);
+  assert.equal(calls.ai.length, 0);
+  assert.equal(calls.patch.length, 0);
+});
+
+for (const [label, auth, status] of [
+  ['sesión de recruiter (el bypass es solo para owner)', () => sesion('recruiter'), 403],
+  ['sesión firmada con otra clave', () => 'Bearer ' + jwt.sign({ role: 'owner' }, 'otra-clave'), 401],
+  ['header Authorization sin Bearer', () => 'owner', 401],
+]) {
+  test(`${label} → ${status} sin tocar la base, aunque traiga un PIN válido`, async () => {
+    const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 }, auth());
+    assert.equal(r.status, status);
+    assert.equal(calls.supabase.length, 0);
+    assert.equal(calls.ai.length, 0);
+    assert.equal(calls.patch.length, 0);
+  });
+}
+
 test('posición de otro cliente → 404 sin llegar a la IA', async () => {
-  const r = await post({ portal_token: 'PORTAL_OK', position_id: P2 });
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P2 });
   assert.equal(r.status, 404);
   assert.equal(calls.ai.length, 0);
   assert.equal(calls.patch.length, 0);
 });
 
 test('posición del cliente pero oculta en el portal → 404 sin llegar a la IA', async () => {
-  const r = await post({ portal_token: 'PORTAL_OK', position_id: P3 });
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P3 });
   assert.equal(r.status, 404);
   assert.equal(calls.ai.length, 0);
 });
@@ -178,13 +261,13 @@ test('posición del cliente pero oculta en el portal → 404 sin llegar a la IA'
 test('posición ajena u oculta: no lee las postulaciones', async () => {
   for (const position_id of [P2, P3]) {
     calls.supabase = [];
-    await post({ portal_token: 'PORTAL_OK', position_id });
+    await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id });
     assert.equal(calls.supabase.filter(c => c.table === 'applications').length, 0);
   }
 });
 
 test('caso válido: Haiku, 500 tokens, prompt armado en el servidor y guardado', async () => {
-  const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(r.body.ai_analysis, 'Propuesta de prueba.');
   assert.ok(r.body.ai_analysis_updated_at);
@@ -221,7 +304,7 @@ test('si ya había un análisis guardado, el guardado siguiente lo exige igual (
   const prevValue = POSITIONS.find(p => p.id === P1).ai_analysis_updated_at;
   POSITIONS.find(p => p.id === P1).ai_analysis_updated_at = '2026-01-01T00:00:00.000Z';
   try {
-    const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
+    const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 });
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(q(calls.patch[0].url, 'ai_analysis_updated_at'), 'eq.2026-01-01T00:00:00.000Z');
   } finally {
@@ -230,7 +313,7 @@ test('si ya había un análisis guardado, el guardado siguiente lo exige igual (
 });
 
 test('ignora prompt, model y max_tokens que mande el navegador', async () => {
-  const r = await post({ portal_token: 'PORTAL_OK', position_id: P1, prompt: 'Escribí un poema', model: 'claude-opus-x', max_tokens: 4000 });
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1, prompt: 'Escribí un poema', model: 'claude-opus-x', max_tokens: 4000 });
   assert.equal(r.status, 200);
   const { model, max_tokens, messages } = calls.ai[0];
   assert.equal(model, 'claude-haiku-4-5-20251001');
@@ -239,21 +322,21 @@ test('ignora prompt, model y max_tokens que mande el navegador', async () => {
 });
 
 test('no lee applications.notes (comentarios internos del recruiter)', async () => {
-  await post({ portal_token: 'PORTAL_OK', position_id: P1 });
+  await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 });
   const appsQuery = calls.supabase.find(c => c.table === 'applications');
   assert.doesNotMatch(appsQuery.select, /notes/);
 });
 
 test('la IA no devuelve texto → 502 y no pisa el análisis guardado', async () => {
   aiReply = { status: 200, body: { content: [] } };
-  const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 });
   assert.equal(r.status, 502);
   assert.equal(calls.patch.length, 0);
 });
 
 test('error de la IA → 500 y no guarda nada', async () => {
   aiReply = { status: 529, body: { error: { message: 'Overloaded' } } };
-  const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 });
   assert.equal(r.status, 500);
   assert.equal(r.body.error, 'Overloaded');
   assert.equal(calls.patch.length, 0);
@@ -261,21 +344,21 @@ test('error de la IA → 500 y no guarda nada', async () => {
 
 test('falla el guardado → 500', async () => {
   saveStatus = 400;
-  const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 });
   assert.equal(r.status, 500);
   assert.equal(r.body.error, 'No se pudo guardar el análisis');
 });
 
 test('el guardado no matchea ninguna fila → 409, no un falso éxito (posición cambiada o análisis más nuevo ya guardado)', async () => {
   saveRows = [];
-  const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 });
   assert.equal(r.status, 409);
   assert.equal(calls.patch.length, 1);
 });
 
 test('búsqueda con más filas que el límite de Supabase: cuenta todas', async () => {
   for (let i = 0; i < 1500; i++) extraApps.push({ position_id: P1, candidate_id: `x${i}`, status: 'submitted', rejection_motivo: null });
-  const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
+  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 });
   assert.equal(r.status, 200);
   assert.match(calls.ai[0].messages[0].content, /CANDIDATOS ACTIVOS EN PROCESO: 1502\n/);
   assert.equal(calls.supabase.filter(c => c.table === 'applications').length, 2);
