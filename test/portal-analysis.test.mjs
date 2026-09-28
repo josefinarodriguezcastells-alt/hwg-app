@@ -196,12 +196,14 @@ test('PIN incorrecto → 403 sin llegar a la IA ni guardar', async () => {
   assert.equal(calls.supabase.filter(c => c.table !== 'clients').length, 0);
 });
 
-test('PIN que no es string → 400 sin tocar la base', async () => {
-  const r = await post({ portal_token: 'PORTAL_OK', portal_pin: ['1234'], position_id: P1 });
-  assert.equal(r.status, 400);
-  assert.equal(calls.supabase.length, 0);
-  assert.equal(calls.ai.length, 0);
-});
+for (const pin of [['1234'], 1234, 0, false]) {
+  test(`PIN que no es string (${JSON.stringify(pin)}) → 400 sin tocar la base`, async () => {
+    const r = await post({ portal_token: 'PORTAL_OK', portal_pin: pin, position_id: P1 });
+    assert.equal(r.status, 400);
+    assert.equal(calls.supabase.length, 0);
+    assert.equal(calls.ai.length, 0);
+  });
+}
 
 // Paso 1 de 3: el portal en producción todavía no manda el PIN, así que
 // sin PIN ni sesión se sigue aceptando solo el token. El paso 3 da vuelta

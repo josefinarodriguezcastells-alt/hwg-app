@@ -123,7 +123,9 @@ async function handler(req, res) {
   let pinFilter = '';
   if (req.headers.authorization) {
     if (!requireRole(req, res, ['owner'])) return;
-  } else if (portal_pin) {
+  } else if (portal_pin != null && portal_pin !== '') {
+    // Cualquier otra cosa que no sea un string (0, false, un array) es un
+    // pedido mal armado, no "sin PIN" (Greptile).
     if (typeof portal_pin !== 'string') return res.status(400).json({ error: 'portal_pin inválido' });
     pinFilter = `&portal_pin=eq.${encodeURIComponent(portal_pin)}`;
   }
