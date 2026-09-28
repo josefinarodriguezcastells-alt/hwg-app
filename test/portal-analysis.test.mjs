@@ -16,6 +16,16 @@ process.env.ANTHROPIC_API_KEY = 'sk-fake';
 process.env.SUPABASE_URL = 'https://fake.supabase.co';
 process.env.SUPABASE_SERVICE_KEY = 'svc-fake';
 
+// Clientes de prueba: uno activo (el que usan casi todos los tests) y uno
+// existente pero inactivo — separado de "token inexistente" (Greptile: el
+// mock viejo no distinguía "no existe" de "existe pero portal_active es
+// false", así que sacar el filtro portal_active=eq.true del código real no
+// hacía fallar ningún test).
+const CLIENTS = [
+  { id: 'c1', portal_token: 'PORTAL_OK', portal_active: true },
+  { id: 'c9', portal_token: 'PORTAL_INACTIVO', portal_active: false },
+];
+
 const P1 = '11111111-1111-4111-8111-111111111111'; // posición del cliente c1, visible
 const P2 = '22222222-2222-4222-8222-222222222222'; // posición de otro cliente
 const P3 = '33333333-3333-4333-8333-333333333333'; // posición de c1, oculta en el portal
@@ -78,7 +88,14 @@ globalThis.fetch = async (url, opts = {}) => {
       return json(saveRows ?? POSITIONS.filter(p => p.id === eq(url, 'id') && p.client_id === eq(url, 'client_id')).map(p => ({ id: p.id })));
     }
     calls.supabase.push({ table, select: q(url, 'select') });
-    if (table === 'clients') return json(eq(url, 'portal_token') === 'PORTAL_OK' ? [{ id: 'c1' }] : []);
+    if (table === 'clients') {
+      // Aplica portal_active=eq.true de verdad (no solo matchea el token):
+      // si el código real dejara de filtrar por portal_active, este mock
+      // seguiría devolviendo el cliente inactivo y el test de abajo fallaría.
+      const cl = CLIENTS.find(c => c.portal_token === eq(url, 'portal_token'));
+      const activo = q(url, 'portal_active') === 'eq.true';
+      return json(cl && activo && cl.portal_active ? [{ id: cl.id }] : []);
+    }
     if (table === 'positions') return json(POSITIONS.filter(p => p.id === eq(url, 'id') && p.client_id === eq(url, 'client_id')));
     if (table === 'client_portal_visibility') return json(paged(VISIBILITY.filter(v => v.client_id === eq(url, 'client_id') && v.position_id === eq(url, 'position_id')), opts));
     if (table === 'applications') return json(paged([...APPS, ...extraApps].filter(a => a.position_id === eq(url, 'position_id')), opts));
@@ -131,8 +148,15 @@ for (const [label, body] of [
   });
 }
 
-test('portal_token que no es de un portal activo → 403 sin llegar a la IA', async () => {
+test('portal_token que no existe → 403 sin llegar a la IA', async () => {
   const r = await post({ portal_token: 'NOPE', position_id: P1 });
+  assert.equal(r.status, 403);
+  assert.equal(calls.ai.length, 0);
+  assert.equal(calls.patch.length, 0);
+});
+
+test('portal_token de un cliente que existe pero está desactivado → 403 sin llegar a la IA', async () => {
+  const r = await post({ portal_token: 'PORTAL_INACTIVO', position_id: P1 });
   assert.equal(r.status, 403);
   assert.equal(calls.ai.length, 0);
   assert.equal(calls.patch.length, 0);
@@ -184,7 +208,25 @@ test('caso válido: Haiku, 500 tokens, prompt armado en el servidor y guardado',
   assert.equal(calls.patch.length, 1);
   assert.equal(eq(calls.patch[0].url, 'id'), P1);
   assert.equal(eq(calls.patch[0].url, 'client_id'), 'c1');
+  // P1 nunca tuvo un análisis guardado (POSITIONS no le pone
+  // ai_analysis_updated_at) — el guard de concurrencia tiene que pedir
+  // "todavía null", no un valor puntual.
+  assert.equal(q(calls.patch[0].url, 'ai_analysis_updated_at'), 'is.null');
   assert.deepEqual(calls.patch[0].body, { ai_analysis: 'Propuesta de prueba.', ai_analysis_updated_at: r.body.ai_analysis_updated_at });
+});
+
+test('si ya había un análisis guardado, el guardado siguiente lo exige igual (no is.null)', async () => {
+  // Simula que P1 ya tiene un análisis previo — se restaura al terminar
+  // para no afectar otros tests, que asumen a P1 sin análisis guardado.
+  const prevValue = POSITIONS.find(p => p.id === P1).ai_analysis_updated_at;
+  POSITIONS.find(p => p.id === P1).ai_analysis_updated_at = '2026-01-01T00:00:00.000Z';
+  try {
+    const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(q(calls.patch[0].url, 'ai_analysis_updated_at'), 'eq.2026-01-01T00:00:00.000Z');
+  } finally {
+    POSITIONS.find(p => p.id === P1).ai_analysis_updated_at = prevValue;
+  }
 });
 
 test('ignora prompt, model y max_tokens que mande el navegador', async () => {
@@ -224,10 +266,10 @@ test('falla el guardado → 500', async () => {
   assert.equal(r.body.error, 'No se pudo guardar el análisis');
 });
 
-test('el guardado no matchea ninguna fila → 404, no un falso éxito', async () => {
+test('el guardado no matchea ninguna fila → 409, no un falso éxito (posición cambiada o análisis más nuevo ya guardado)', async () => {
   saveRows = [];
   const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
-  assert.equal(r.status, 404);
+  assert.equal(r.status, 409);
   assert.equal(calls.patch.length, 1);
 });
 
@@ -254,7 +296,7 @@ test('posición sin rechazos, sin fecha, sin JD ni rango: mismas líneas que el 
   const r = resumenPosicion({ role: 'X', opened_at: null, salary_band: null, jd_structured: null }, [], [{ candidate_id: null, visible: true }]);
   const p = armarPrompt(r);
   assert.match(p, /DÍAS ABIERTA: recién abierta\n/);
-  assert.match(p, /MOTIVOS DE RECHAZO \(de más a menos frecuente\):\nSin rechazos registrados\n\n\n\n/);
+  assert.match(p, /MOTIVOS DE RECHAZO \(de más a menos frecuente.*\):\nSin rechazos registrados\n\n\n\n/);
 });
 
 test('rejection_motivo como objeto usa motivo o label', async () => {
@@ -264,5 +306,23 @@ test('rejection_motivo como objeto usa motivo o label', async () => {
     { candidate_id: 'b', status: 'rechazado', rejection_motivo: { label: 'L' } },
     { candidate_id: 'c', status: 'rechazado', rejection_motivo: {} },
   ], []);
-  assert.deepEqual(r.motivoMap, { M: 1, L: 1, 'Sin motivo registrado': 1 });
+  // node:assert/strict hace que deepEqual también compare el prototipo, y
+  // motivoMap es Object.create(null) a propósito (test de abajo) — se
+  // compara por valores, no por identidad de prototipo.
+  assert.deepEqual({ ...r.motivoMap }, { M: 1, L: 1, 'Sin motivo registrado': 1 });
+});
+
+test('un motivo "__proto__" o "constructor" no choca con lo heredado del objeto (Greptile)', async () => {
+  const { resumenPosicion } = require('../api/portal-analysis.js');
+  const r = resumenPosicion({ role: 'X' }, [
+    { candidate_id: 'a', status: 'rechazado', rejection_motivo: '__proto__' },
+    { candidate_id: 'b', status: 'rechazado', rejection_motivo: 'constructor' },
+    { candidate_id: 'c', status: 'rechazado', rejection_motivo: 'constructor' },
+  ], []);
+  // Object.create(null): sin esto, "__proto__" no queda como clave propia
+  // (o directamente rompe el objeto) y "constructor" arranca en 1 en vez
+  // de 0 por chocar con Object.prototype.constructor.
+  assert.equal(r.motivoMap.__proto__, 1);
+  assert.equal(r.motivoMap.constructor, 2);
+  assert.deepEqual(Object.keys(r.motivoMap).sort(), ['__proto__', 'constructor']);
 });
