@@ -1,9 +1,9 @@
 // Control de acceso de los endpoints que gastan IA (o procesan archivos).
 // Monta cada handler detrás de un server HTTP local y le pega con fetch
-// real (incluye multipart). Las llamadas salientes a Anthropic y Supabase
-// están mockeadas: nunca se llama a la IA ni a la base de verdad.
+// real (incluye multipart). La llamada saliente a Anthropic está mockeada:
+// nunca se llama a la IA de verdad. Cualquier otro fetch saliente falla.
 //
-// Correr con: npm test   (o: node --test test/)
+// Correr con: npm test
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,14 +17,6 @@ const SECRET = 'test-secret';
 process.env.SESSION_SECRET = SECRET;
 process.env.ANTHROPIC_API_KEY = 'sk-fake';
 process.env.AI_PROVIDER = 'claude';
-process.env.SUPABASE_URL = 'https://fake.supabase.co';
-process.env.SUPABASE_SERVICE_KEY = 'svc-fake';
-
-const CLIENTS = [
-  { id: 'c1', portal_token: 'PORTAL_OK', portal_pin: '1234', portal_active: true },
-  { id: 'c2', portal_token: 'PORTAL_INACTIVO', portal_pin: '1234', portal_active: false },
-];
-
 const realFetch = globalThis.fetch;
 let aiCalls = [];
 globalThis.fetch = async (url, opts = {}) => {
@@ -35,14 +27,8 @@ globalThis.fetch = async (url, opts = {}) => {
     aiCalls.push({ model: body.model, max_tokens: body.max_tokens });
     return new Response(JSON.stringify({ content: [{ type: 'text', text: '{}' }] }), { status: 200 });
   }
-  if (url.startsWith('https://fake.supabase.co/rest/v1/clients')) {
-    // Aplica los filtros eq. de la URL como PostgREST: si el endpoint deja
-    // de filtrar por portal_pin o portal_active, los tests lo detectan.
-    const params = new URL(url).searchParams;
-    const rows = CLIENTS.filter(c => [...params].every(([k, v]) =>
-      k === 'select' || (v.startsWith('eq.') && String(c[k]) === v.slice(3))));
-    return new Response(JSON.stringify(rows.map(c => ({ id: c.id }))), { status: 200 });
-  }
+  // Ninguno de estos endpoints consulta Supabase: si alguno volviera a
+  // hacerlo (p. ej. un camino por portal_token), esto tira y el test falla.
   throw new Error('fetch no mockeado: ' + url);
 };
 
@@ -134,43 +120,25 @@ for (const name of ['generate', 'extract-profile', 'extract-text']) {
   });
 }
 
-const PORTAL = { portal_token: 'PORTAL_OK', portal_pin: '1234' };
-
-test('analyze: portal_token + PIN válidos fija Haiku y 500 tokens', async () => {
-  const r = await post('analyze', { body: bodies.analyze(PORTAL) });
-  assert.equal(r.status, 200, r.text);
-  assert.deepEqual(r.aiCalls, [{ model: 'claude-haiku-4-5-20251001', max_tokens: 500 }]);
+// El portal de clientes usa /api/portal-analysis. En analyze, portal_token
+// + PIN ya no abren ningún camino: sin sesión es 401 igual.
+test('analyze: portal_token + PIN sin sesión → 401 sin llegar a la IA', async () => {
+  const r = await post('analyze', { body: bodies.analyze({ portal_token: 'PORTAL_OK', portal_pin: '1234' }) });
+  assert.equal(r.status, 401, r.text);
+  assert.equal(r.aiCalls.length, 0);
 });
 
-test('analyze: por el portal no se puede subir max_tokens pero sí bajarlo', async () => {
-  const r = await post('analyze', { body: bodies.analyze({ ...PORTAL, max_tokens: 100 }) });
-  assert.deepEqual(r.aiCalls, [{ model: 'claude-haiku-4-5-20251001', max_tokens: 100 }]);
-});
-
-for (const [label, extra, status] of [
-  ['portal_token sin PIN (solo el link del portal)', { portal_token: 'PORTAL_OK' }, 401],
-  ['PIN incorrecto', { portal_token: 'PORTAL_OK', portal_pin: '0000' }, 403],
-  ['portal existente pero inactivo', { portal_token: 'PORTAL_INACTIVO', portal_pin: '1234' }, 403],
-  ['portal_token inexistente', { portal_token: 'NOPE', portal_pin: '1234' }, 403],
-]) {
-  test(`analyze: ${label} → ${status} sin llegar a la IA`, async () => {
-    const r = await post('analyze', { body: bodies.analyze(extra) });
-    assert.equal(r.status, status, r.text);
-    assert.equal(r.aiCalls.length, 0);
-  });
-}
-
-test('analyze: con sesión válida gana la sesión aunque venga portal_token', async () => {
-  const r = await post('analyze', { auth: bearer('recruiter'), body: bodies.analyze({ portal_token: 'NOPE' }) });
+test('analyze: con sesión válida, portal_token se ignora', async () => {
+  const r = await post('analyze', { auth: bearer('recruiter'), body: bodies.analyze({ portal_token: 'PORTAL_OK' }) });
   assert.equal(r.status, 200, r.text);
   assert.deepEqual(r.aiCalls, [{ model: 'claude-opus-x', max_tokens: 4000 }]);
 });
 
-// Paso 1 de 3: sin sesión todavía se deja pasar (el ATS en producción aún
-// no la manda). Cuando se pase a exigirla, este test cambia a esperar 401.
+// La sesión es obligatoria: sin Authorization no se procesa nada.
 for (const name of NAMES) {
-  test(`${name}: sin sesión, por ahora, pasa (paso 1 de 3)`, async () => {
+  test(`${name}: sin sesión → 401 sin llegar a la IA`, async () => {
     const r = await post(name);
-    assert.equal(r.status, 200, r.text);
+    assert.equal(r.status, 401, r.text);
+    assert.equal(r.aiCalls.length, 0);
   });
 }

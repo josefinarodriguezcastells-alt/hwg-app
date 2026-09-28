@@ -1,28 +1,5 @@
 const { requireRole } = require('./_auth');
 
-// El portal de clientes no tiene sesión del ATS. Para usar este endpoint
-// tiene que mandar portal_token Y portal_pin: el token solo viaja en la URL
-// del portal, así que por sí solo no prueba nada; el PIN es lo mismo que
-// pide la pantalla de entrada del portal. Por ese camino el modelo y el
-// largo quedan fijos a lo que usa el portal ("Análisis de la
-// búsqueda" en ClientPortal.jsx), así un link de portal no sirve para
-// consumir un modelo caro con respuestas largas.
-const PORTAL_MODEL = 'claude-haiku-4-5-20251001';
-const PORTAL_MAX_TOKENS = 500;
-
-async function portalValido(portalToken, portalPin) {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) throw new Error('Variables de entorno de Supabase no configuradas');
-  const resp = await fetch(
-    `${SUPABASE_URL}/rest/v1/clients?portal_token=eq.${encodeURIComponent(portalToken)}&portal_pin=eq.${encodeURIComponent(portalPin)}&portal_active=eq.true&select=id`,
-    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
-  );
-  if (!resp.ok) throw new Error('No se pudo validar el portal');
-  const rows = await resp.json();
-  return Array.isArray(rows) && rows.length > 0;
-}
-
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -30,23 +7,14 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  try {
-    const { prompt, portal_token, portal_pin } = req.body || {};
-    let { model, max_tokens } = req.body || {};
+  // Solo el ATS (owner o recruiter con sesión) puede usar este endpoint:
+  // cuesta créditos de IA de HWG por uso y acepta cualquier prompt. El ATS
+  // manda la sesión desde hwg_ats#55. El portal de clientes ya no pasa por
+  // acá: usa /api/portal-analysis, que arma el prompt en el servidor.
+  if (!requireRole(req, res, ['owner', 'recruiter'])) return;
 
-    // Paso 1 de 3 para cerrar este endpoint (cuesta créditos de IA de HWG por
-    // uso y no pedía nada): si viene sesión del ATS o portal_token (+ PIN),
-    // se validan; si no viene ninguno, todavía se deja pasar porque el ATS en
-    // producción aún no los manda. Cuando el ATS que los manda esté
-    // deployado, pasa a exigirse uno de los dos siempre.
-    if (req.headers.authorization) {
-      if (!requireRole(req, res, ['owner', 'recruiter'])) return;
-    } else if (portal_token) {
-      if (!portal_pin) return res.status(401).json({ error: 'Falta el PIN del portal' });
-      if (!(await portalValido(String(portal_token), String(portal_pin)))) return res.status(403).json({ error: 'Portal o PIN inválido' });
-      model = PORTAL_MODEL;
-      max_tokens = Math.min(Number(max_tokens) || PORTAL_MAX_TOKENS, PORTAL_MAX_TOKENS);
-    }
+  try {
+    const { prompt, model, max_tokens } = req.body || {};
 
     if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
 
