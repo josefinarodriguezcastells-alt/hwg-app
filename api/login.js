@@ -7,6 +7,35 @@
 const bcrypt = require('bcryptjs');
 const { signSession } = require('./_auth');
 
+// Auditoría de los 20 endpoints: no había ningún límite de intentos —
+// alguien podía probar contraseñas para un email sin ningún freno.
+// record_login_attempt()/clear_login_attempts() (sql/login-attempts-table.sql)
+// hacen el conteo en Postgres, no acá, por 3 hallazgos reales de Greptile
+// sobre la primera versión (SELECT + INSERT desde el código):
+// - Lockout dirigido: el límite era solo por email — cualquiera podía
+//   tirar 5 contraseñas mal para el mail de OTRA persona y dejarla afuera
+//   repetible. La clave ahora es (email, ip): un ataque desde una IP no
+//   bloquea a la dueña de la cuenta entrando desde la suya.
+// - Carrera: dos pedidos en simultáneo podían leer "todavía no llegué a 5"
+//   los dos antes de que ninguno hubiera guardado el suyo. La función
+//   inserta y cuenta en una sola sentencia — no hay ventana entre leer y
+//   guardar.
+// - Un INSERT fallido quedaba silencioso y ese intento no contaba. Acá se
+//   revisa la respuesta de la función y, si no se pudo correr, se corta el
+//   login (falla cerrado) en vez de dejar pasar sin ningún freno — login
+//   ya depende del mismo Supabase para leer `users`, así que fallar acá
+//   tampoco resigna disponibilidad que no se hubiera perdido igual un paso
+//   después.
+const MAX_ATTEMPTS = 5;
+const WINDOW_MINUTES = 15;
+
+function clientIp(req) {
+  // Vercel arma x-forwarded-for como "cliente, proxy1, proxy2...".
+  const fwd = req.headers['x-forwarded-for'];
+  const first = (Array.isArray(fwd) ? fwd[0] : fwd || '').split(',')[0].trim();
+  return first || 'sin-ip';
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -20,20 +49,49 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
   }
 
+  const dbHeaders = {
+    apikey: SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  };
+  const rpc = (fn, args) => fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { ...dbHeaders, Prefer: 'return=representation' },
+    body: JSON.stringify(args),
+  });
+
   try {
     const { email, password } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ error: 'Email y contraseña requeridos' });
     }
+    // emailNorm es solo para CONTAR intentos (sin distinguir mayúsculas, así
+    // no se esquiva el límite escribiéndolo distinto cada vez) — la consulta
+    // a `users` de abajo sigue usando `email` tal cual lo mandaron, como
+    // hacía antes. Hay emails reales guardados con mayúsculas de mitad de
+    // palabra (ej. "Majulcarlaa@gmail.com"), y `eq.` en PostgREST distingue
+    // mayúsculas: normalizarlo ahí rompería el login de esas cuentas.
+    const emailNorm = String(email).trim().toLowerCase();
+    const ip = clientIp(req);
+
+    // Reserva este intento y cuenta cuántos hay para (emailNorm, ip) en la
+    // ventana, ANTES de tocar `users` o comparar nada — así un intento que
+    // termina resultando exitoso también reserva su lugar (y lo libera abajo
+    // con clear_login_attempts), sin la ventana entre "leer" y "guardar" que
+    // tenía la versión anterior.
+    const attemptResp = await rpc('record_login_attempt', { p_email: emailNorm, p_ip: ip, p_window_minutes: WINDOW_MINUTES });
+    if (!attemptResp.ok) {
+      console.error('login: record_login_attempt falló', await attemptResp.text());
+      return res.status(500).json({ error: 'No se pudo procesar el login, intentá de nuevo' });
+    }
+    const [{ recent_count } = {}] = await attemptResp.json();
+    if (recent_count > MAX_ATTEMPTS) {
+      return res.status(429).json({ error: `Demasiados intentos. Esperá ${WINDOW_MINUTES} minutos e intentá de nuevo.` });
+    }
 
     const resp = await fetch(
       `${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(email)}&select=*`,
-      {
-        headers: {
-          apikey: SUPABASE_SERVICE_KEY,
-          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-        },
-      }
+      { headers: dbHeaders }
     );
     if (!resp.ok) {
       console.error('login: supabase query failed', await resp.text());
@@ -44,7 +102,9 @@ module.exports = async function handler(req, res) {
     const user = rows[0];
 
     // Mismo mensaje de error si el usuario no existe o si la contraseña no
-    // matchea, para no revelar qué emails están registrados.
+    // matchea, para no revelar qué emails están registrados. El intento ya
+    // quedó contado por record_login_attempt de arriba — nada más que hacer
+    // acá salvo responder.
     if (!user || !user.password) {
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
@@ -52,6 +112,13 @@ module.exports = async function handler(req, res) {
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
       return res.status(401).json({ error: 'Credenciales incorrectas' });
+    }
+
+    // Login exitoso: se libera el contador de este (email, ip) — best-effort,
+    // no hace fallar un login que ya es válido si esto no se pudo guardar.
+    const clearResp = await rpc('clear_login_attempts', { p_email: emailNorm, p_ip: ip }).catch(() => null);
+    if (!clearResp || !clearResp.ok) {
+      console.error('login: clear_login_attempts falló (no bloquea el login)');
     }
 
     const { password: _omit, ...safeUser } = user;
