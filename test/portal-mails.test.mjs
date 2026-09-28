@@ -89,16 +89,20 @@ beforeEach(() => { mails = []; });
 
 const bearer = (role) => ({ authorization: 'Bearer ' + jwt.sign({ id: 1, email: 'a@b.c', role }, 'test-secret') });
 
-test('notify: sin portal_token ni PIN → 401 y no manda mail', async () => {
+test('notify: sin portal_token ni PIN → 403 y no manda mail', async () => {
   const r = await call(notify, { title: 'Dev' });
-  assert.equal(r.status, 401);
+  assert.equal(r.status, 403);
   assert.equal(mails.length, 0);
 });
 
-test('notify: portal_token sin PIN → 401 y no manda mail (el token solo no alcanza)', async () => {
+// Paso 1/3 (Greptile en #25): con required:false, portal_token sin PIN
+// todavía funciona — igual que antes de este PR — mientras el ATS que
+// manda el PIN (hwg_ats#64) termina de deployarse. El paso 3 (aparte)
+// pasa a required:true y este caso vuelve a dar 401.
+test('notify: portal_token sin PIN todavía funciona (paso 1/3 — required:false)', async () => {
   const r = await call(notify, { portal_token: 'PORTAL_OK', title: 'Dev' });
-  assert.equal(r.status, 401);
-  assert.equal(mails.length, 0);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(mails.length, 1);
 });
 
 test('notify: PIN incorrecto → 403 y no manda mail', async () => {
@@ -143,16 +147,17 @@ test('notify: destinatarios fijos, cliente de la base, HTML escapado', async () 
 
 const msg = (extra) => ({ portal_token: 'PORTAL_OK', portal_pin: '1234', to: 'rec.uno@hwgtalent.com', fromEmail: 'hm@acme.example', message: 'hola', ...extra });
 
-test('notify-message: sin portal_token ni PIN → 401 y no manda mail', async () => {
+test('notify-message: sin portal_token ni PIN → 403 y no manda mail', async () => {
   const r = await call(notifyMessage, msg({ portal_token: undefined, portal_pin: undefined }));
-  assert.equal(r.status, 401);
+  assert.equal(r.status, 403);
   assert.equal(mails.length, 0);
 });
 
-test('notify-message: portal_token sin PIN → 401 y no manda mail', async () => {
+// Paso 1/3 — ver el comentario en la sección de notify, arriba.
+test('notify-message: portal_token sin PIN todavía funciona (paso 1/3 — required:false)', async () => {
   const r = await call(notifyMessage, msg({ portal_pin: undefined }));
-  assert.equal(r.status, 401);
-  assert.equal(mails.length, 0);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(mails.length, 1);
 });
 
 test('notify-message: PIN incorrecto → 403 y no manda mail', async () => {

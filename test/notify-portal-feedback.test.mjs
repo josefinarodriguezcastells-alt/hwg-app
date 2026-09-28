@@ -27,10 +27,11 @@ const CANDIDATES = { k1: { id: 'k1', name: 'Cande Real' } };
 const RECRUITERS = [{ id: 'u1', email: 'rec@hwgtalent.com' }];
 const POSITION_RECRUITERS = [{ position_id: 'p1', recruiter_id: 'u1' }];
 
-let notesByApp, mails, bearer;
+let notesByApp, mails, bearer, forceClientsQueryFail;
 beforeEach(() => {
   notesByApp = { [APP_ID]: [{ note: '[avanzar] muy buen candidato', created_at: '2026-09-01T00:00:00Z' }] };
   mails = [];
+  forceClientsQueryFail = false;
   bearer = (role) => ({ authorization: 'Bearer ' + jwt.sign({ id: 1, email: 'a@b.c', role }, 'test-secret') });
 });
 
@@ -48,6 +49,7 @@ globalThis.fetch = async (url, opts = {}) => {
   const table = new URL(url).pathname.split('/').pop();
 
   if (table === 'clients') {
+    if (forceClientsQueryFail) return json({ message: 'fallo de Supabase' }, 500);
     const tok = eq(url, 'portal_token');
     const pin = q(url, 'portal_pin');
     let rows = CLIENTS.filter(c => c.portal_token === tok);
@@ -97,10 +99,12 @@ test('preflight', async () => {
 
 // ── Acceso ──────────────────────────────────────────────────────────────
 
-test('sin PIN ni sesión → 401, no manda mail', async () => {
+// Paso 1/3 (Greptile en #25) — ver el comentario largo en
+// test/portal-candidate-action.test.mjs.
+test('sin PIN ni sesión: todavía funciona con el token solo (paso 1/3 — required:false)', async () => {
   const r = await call(req({ portal_pin: undefined }));
-  assert.equal(r.status, 401);
-  assert.equal(mails.length, 0);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(mails.length, 1);
 });
 
 test('PIN incorrecto → 403, no manda mail', async () => {
@@ -112,6 +116,18 @@ test('PIN incorrecto → 403, no manda mail', async () => {
 test('PIN de OTRO cliente → 403', async () => {
   const r = await call(req({ portal_pin: '5678' }));
   assert.equal(r.status, 403);
+});
+
+// Greptile: si la consulta a clients (adentro de resolvePortalWriter) tira
+// una excepción, antes cualquier catch de más arriba la agarraba y
+// respondía 200 {mailFailed:true} — como si el problema fuera el ENVÍO del
+// mail, cuando en realidad ni siquiera se pudo validar el portal. Ahora es
+// un 500 real, distinguible de "se pudo validar todo pero Resend falló".
+test('si falla la consulta que valida el portal, da 500 real (no un 200 disfrazado de "falló el envío")', async () => {
+  forceClientsQueryFail = true;
+  const r = await call(req());
+  assert.equal(r.status, 500, JSON.stringify(r.body));
+  assert.equal(mails.length, 0);
 });
 
 test('sesión del owner sin PIN también sirve', async () => {

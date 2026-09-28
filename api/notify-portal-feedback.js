@@ -123,13 +123,25 @@ module.exports = async function handler(req, res) {
   }
   const baseHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' };
 
+  // portal_pin o la sesión del owner — mismo criterio que portal-analysis
+  // (hwg-app#19/#20): portal_token solo, que viaja en la URL del portal, no
+  // prueba que quien llama pasó la pantalla de PIN. Fuera del try de abajo
+  // (Greptile): ese try termina en un catch "best-effort" pensado para
+  // cuando falla el ENVÍO del mail (el dato del cliente ya está guardado, no
+  // hay que romper la UI por eso) — antes, si esta resolución tiraba una
+  // excepción (ej. Supabase caído), caía en ese mismo catch y respondía
+  // 200 {mailFailed:true}, como si el problema fuera el envío y no que ni
+  // siquiera se pudo validar el portal.
+  let client;
   try {
-    // portal_pin o la sesión del owner — mismo criterio que portal-analysis
-    // (hwg-app#19/#20): portal_token solo, que viaja en la URL del portal,
-    // no prueba que quien llama pasó la pantalla de PIN.
-    const client = await resolvePortalWriter(req, res, portal_token, portal_pin);
-    if (!client) return;
+    client = await resolvePortalWriter(req, res, portal_token, portal_pin, { required: false }); // paso 1/3, ver _portal.js
+  } catch (e) {
+    console.error('notify-portal-feedback: resolvePortalWriter error:', e);
+    return res.status(500).json({ error: 'Error validando el portal' });
+  }
+  if (!client) return;
 
+  try {
     // La postulación tiene que pertenecer a una posición de ESTE cliente —
     // se resuelve con un join, no se confía en ningún dato que mande el
     // caller aparte del portal_token y el application_id (mismo criterio
