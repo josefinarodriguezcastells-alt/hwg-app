@@ -3,6 +3,13 @@
 // en vez de mailto — así el mail sale siempre, con copia a josie@hwgtalent.com
 // garantizada del lado del servidor (no depende de que el cliente tenga un
 // programa de mail configurado ni de que no borre el CC antes de mandar).
+//
+// Solo con un portal activo (portal_token), y solo a un recruiter asignado
+// a una posición de ESE cliente: antes `to` venía del pedido, así que
+// cualquiera con la URL podía mandar mails a cualquier dirección desde la
+// casilla de HWG. El mensaje se escapa antes de ir al HTML.
+
+import { EMAIL_RE, escapeHtml, resolvePortalClient, clientRecruiters } from './_portal.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -15,11 +22,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { to, recruiterName, clientName, fromEmail, message } = req.body;
+    const { portal_token, to, fromEmail, message } = req.body || {};
 
-    if (!to || !fromEmail || !message || !String(message).trim()) {
+    const text = String(message ?? '').trim().slice(0, 5000);
+    const from = String(fromEmail ?? '').trim();
+    if (!to || !text || !EMAIL_RE.test(from) || from.length > 200) {
       return res.status(400).json({ error: 'Faltan datos (to, fromEmail, message)' });
     }
+
+    const client = await resolvePortalClient(portal_token);
+    if (!client) return res.status(403).json({ error: 'Portal inválido o inactivo' });
+    const recruiter = (await clientRecruiters(client.id))
+      .find(r => r.email.toLowerCase() === String(to).trim().toLowerCase());
+    if (!recruiter) return res.status(403).json({ error: 'Ese destinatario no es un recruiter de este cliente' });
+
+    // Nombres desde la base, no del pedido.
+    const clientName = client.name || '';
+    const recruiterName = recruiter.name || '';
 
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
     if (!RESEND_API_KEY) {
@@ -27,7 +46,7 @@ export default async function handler(req, res) {
     }
 
     // Copia fija a Josie — no es editable desde el portal.
-    const toAddresses = [...new Set([to, 'josie@hwgtalent.com'])];
+    const toAddresses = [...new Set([recruiter.email, 'josie@hwgtalent.com'])];
 
     const html = `
 <!DOCTYPE html>
@@ -38,14 +57,14 @@ export default async function handler(req, res) {
 
     <div style="background:#7c3aed;padding:24px 32px;">
       <div style="font-size:18px;font-weight:700;color:#fff;">✉ Mensaje desde el portal</div>
-      <div style="font-size:13px;color:#ede9fe;margin-top:4px;">De ${clientName || 'un cliente'} (${fromEmail})${recruiterName ? ` para ${recruiterName}` : ''}</div>
+      <div style="font-size:13px;color:#ede9fe;margin-top:4px;">De ${escapeHtml(clientName || 'un cliente')} (${escapeHtml(from)})${recruiterName ? ` para ${escapeHtml(recruiterName)}` : ''}</div>
     </div>
 
     <div style="padding:28px 32px;">
-      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;font-size:14px;color:#111827;white-space:pre-wrap;line-height:1.6;">${String(message).trim()}</div>
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;font-size:14px;color:#111827;white-space:pre-wrap;line-height:1.6;">${escapeHtml(text)}</div>
 
       <div style="margin-top:20px;font-size:12px;color:#6b7280;">
-        Respondé directamente a este mail — llega a ${fromEmail}.
+        Respondé directamente a este mail — llega a ${escapeHtml(from)}.
       </div>
     </div>
 
@@ -65,8 +84,8 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: 'HWG ATS <notificaciones@hwgtalent.com>',
         to: toAddresses,
-        reply_to: fromEmail,
-        subject: `[Portal] Mensaje de ${clientName || 'un cliente'}${recruiterName ? ' para ' + recruiterName : ''}`,
+        reply_to: from,
+        subject: `[Portal] Mensaje de ${clientName || 'un cliente'}${recruiterName ? ' para ' + recruiterName : ''}`.replace(/[\r\n]+/g, ' '),
         html,
       }),
     });
