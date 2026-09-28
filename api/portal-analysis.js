@@ -9,6 +9,16 @@
 // servidor resuelve el cliente, verifica que la posición sea suya y esté
 // visible en el portal, calcula los datos, arma el prompt, llama a la IA
 // con modelo y largo fijos, y guarda positions.ai_analysis.
+//
+// El portal_token viaja en la URL del portal (/portal/:token), así que por
+// sí solo no prueba nada: quien tenga el link podría gastar IA y pisar el
+// análisis guardado. Hace falta además una de dos cosas:
+// - portal_pin: el PIN con el que el cliente entró, validado en la misma
+//   consulta a clients que el token (mismo criterio que tenía /api/analyze).
+// - La sesión del ATS de un owner (header Authorization): el owner entra al
+//   portal sin PIN, por el bypass de whoami.js.
+
+const { requireRole } = require('./_auth');
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 500;
@@ -95,15 +105,30 @@ Respondé solo el texto del mensaje, sin encabezados.`;
 async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { portal_token, position_id } = req.body || {};
+  const { portal_token, portal_pin, position_id } = req.body || {};
   if (!portal_token || !position_id) return res.status(400).json({ error: 'Faltan datos (portal_token, position_id)' });
   // position_id va a una URL armada a mano: se valida como UUID antes de
   // usarlo (mismo motivo que en portal-presentations.js).
   if (typeof position_id !== 'string' || !UUID_RE.test(position_id)) return res.status(400).json({ error: 'position_id inválido' });
+
+  // Paso 1 de 3: si viene la sesión del ATS, tiene que ser de un owner; si
+  // viene portal_pin, se valida junto con el token. Si no viene ninguno,
+  // todavía se deja pasar solo con el token, porque el portal en producción
+  // aún no manda el PIN. Cuando el portal que lo manda esté deployado, pasa
+  // a exigirse uno de los dos siempre.
+  let pinFilter = '';
+  if (req.headers.authorization) {
+    if (!requireRole(req, res, ['owner'])) return;
+  } else if (portal_pin != null && portal_pin !== '') {
+    // Cualquier otra cosa que no sea un string (0, false, un array) es un
+    // pedido mal armado, no "sin PIN" (Greptile).
+    if (typeof portal_pin !== 'string') return res.status(400).json({ error: 'portal_pin inválido' });
+    pinFilter = `&portal_pin=eq.${encodeURIComponent(portal_pin)}`;
+  }
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -131,9 +156,9 @@ async function handler(req, res) {
   };
 
   try {
-    const clients = await get(`clients?portal_token=eq.${encodeURIComponent(portal_token)}&portal_active=eq.true&select=id`);
+    const clients = await get(`clients?portal_token=eq.${encodeURIComponent(portal_token)}${pinFilter}&portal_active=eq.true&select=id`);
     const client = Array.isArray(clients) ? clients[0] : null;
-    if (!client) return res.status(403).json({ error: 'Portal inválido' });
+    if (!client) return res.status(403).json({ error: pinFilter ? 'Portal o PIN inválido' : 'Portal inválido' });
 
     // Filtrar por client_id en la misma consulta: una posición de otro
     // cliente da lo mismo que una que no existe. Las postulaciones se leen
