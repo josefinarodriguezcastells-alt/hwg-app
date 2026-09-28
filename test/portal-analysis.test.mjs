@@ -205,16 +205,16 @@ for (const pin of [['1234'], 1234, 0, false]) {
   });
 }
 
-// Paso 1 de 3: el portal en producción todavía no manda el PIN, así que
-// sin PIN ni sesión se sigue aceptando solo el token. El paso 3 da vuelta
-// este test (401 sin llegar a la base).
-test('sin PIN ni sesión: todavía pasa con el token solo (paso 1 de 3)', async () => {
-  const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 });
-  assert.equal(r.status, 200, JSON.stringify(r.body));
-  const cq = calls.supabase.find(c => c.table === 'clients');
-  assert.equal(q(cq.url, 'portal_pin'), null);
-  assert.equal(q(cq.url, 'portal_active'), 'eq.true');
-});
+for (const [label, pin] of [['sin PIN', undefined], ['PIN vacío', ''], ['PIN null', null]]) {
+  test(`${label} ni sesión → 401 sin tocar la base ni la IA`, async () => {
+    const r = await post({ portal_token: 'PORTAL_OK', position_id: P1, ...(pin === undefined ? {} : { portal_pin: pin }) });
+    assert.equal(r.status, 401);
+    assert.equal(r.body.error, 'Falta el PIN del portal');
+    assert.equal(calls.supabase.length, 0);
+    assert.equal(calls.ai.length, 0);
+    assert.equal(calls.patch.length, 0);
+  });
+}
 
 test('owner con sesión del ATS, sin PIN (bypass del portal) → 200', async () => {
   const r = await post({ portal_token: 'PORTAL_OK', position_id: P1 }, sesion('owner'));
