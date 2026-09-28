@@ -115,11 +115,8 @@ async function handler(req, res) {
   // usarlo (mismo motivo que en portal-presentations.js).
   if (typeof position_id !== 'string' || !UUID_RE.test(position_id)) return res.status(400).json({ error: 'position_id inválido' });
 
-  // Paso 1 de 3: si viene la sesión del ATS, tiene que ser de un owner; si
-  // viene portal_pin, se valida junto con el token. Si no viene ninguno,
-  // todavía se deja pasar solo con el token, porque el portal en producción
-  // aún no manda el PIN. Cuando el portal que lo manda esté deployado, pasa
-  // a exigirse uno de los dos siempre.
+  // Sesión del ATS de un owner, o el PIN del portal: el token solo no
+  // alcanza.
   let pinFilter = '';
   if (req.headers.authorization) {
     if (!requireRole(req, res, ['owner'])) return;
@@ -128,6 +125,8 @@ async function handler(req, res) {
     // pedido mal armado, no "sin PIN" (Greptile).
     if (typeof portal_pin !== 'string') return res.status(400).json({ error: 'portal_pin inválido' });
     pinFilter = `&portal_pin=eq.${encodeURIComponent(portal_pin)}`;
+  } else {
+    return res.status(401).json({ error: 'Falta el PIN del portal' });
   }
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
