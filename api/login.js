@@ -8,13 +8,33 @@ const bcrypt = require('bcryptjs');
 const { signSession } = require('./_auth');
 
 // Auditoría de los 20 endpoints: no había ningún límite de intentos —
-// alguien podía probar contraseñas para un email sin ningún freno. Cada
-// intento fallido (nunca uno exitoso, ni la contraseña probada) se guarda
-// en login_attempts (sql/login-attempts-table.sql); si hay MAX_ATTEMPTS o
-// más en los últimos WINDOW_MINUTES para ese email, se corta acá — antes
-// de tocar Supabase por el usuario o comparar el hash — con 429.
+// alguien podía probar contraseñas para un email sin ningún freno.
+// record_login_attempt()/clear_login_attempts() (sql/login-attempts-table.sql)
+// hacen el conteo en Postgres, no acá, por 3 hallazgos reales de Greptile
+// sobre la primera versión (SELECT + INSERT desde el código):
+// - Lockout dirigido: el límite era solo por email — cualquiera podía
+//   tirar 5 contraseñas mal para el mail de OTRA persona y dejarla afuera
+//   repetible. La clave ahora es (email, ip): un ataque desde una IP no
+//   bloquea a la dueña de la cuenta entrando desde la suya.
+// - Carrera: dos pedidos en simultáneo podían leer "todavía no llegué a 5"
+//   los dos antes de que ninguno hubiera guardado el suyo. La función
+//   inserta y cuenta en una sola sentencia — no hay ventana entre leer y
+//   guardar.
+// - Un INSERT fallido quedaba silencioso y ese intento no contaba. Acá se
+//   revisa la respuesta de la función y, si no se pudo correr, se corta el
+//   login (falla cerrado) en vez de dejar pasar sin ningún freno — login
+//   ya depende del mismo Supabase para leer `users`, así que fallar acá
+//   tampoco resigna disponibilidad que no se hubiera perdido igual un paso
+//   después.
 const MAX_ATTEMPTS = 5;
 const WINDOW_MINUTES = 15;
+
+function clientIp(req) {
+  // Vercel arma x-forwarded-for como "cliente, proxy1, proxy2...".
+  const fwd = req.headers['x-forwarded-for'];
+  const first = (Array.isArray(fwd) ? fwd[0] : fwd || '').split(',')[0].trim();
+  return first || 'sin-ip';
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -34,20 +54,11 @@ module.exports = async function handler(req, res) {
     Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
     'Content-Type': 'application/json',
   };
-  // Registrar el intento fallido nunca debe ser lo que tira el 500 de un
-  // login que en realidad falló por credenciales — mejor un intento no
-  // contado que una respuesta rota.
-  const logFailedAttempt = async (emailNorm) => {
-    try {
-      await fetch(`${SUPABASE_URL}/rest/v1/login_attempts`, {
-        method: 'POST',
-        headers: { ...dbHeaders, Prefer: 'return=minimal' },
-        body: JSON.stringify([{ email: emailNorm }]),
-      });
-    } catch (e) {
-      console.error('login: no se pudo registrar el intento fallido', e);
-    }
-  };
+  const rpc = (fn, args) => fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { ...dbHeaders, Prefer: 'return=representation' },
+    body: JSON.stringify(args),
+  });
 
   try {
     const { email, password } = req.body || {};
@@ -61,21 +72,21 @@ module.exports = async function handler(req, res) {
     // palabra (ej. "Majulcarlaa@gmail.com"), y `eq.` en PostgREST distingue
     // mayúsculas: normalizarlo ahí rompería el login de esas cuentas.
     const emailNorm = String(email).trim().toLowerCase();
+    const ip = clientIp(req);
 
-    const since = new Date(Date.now() - WINDOW_MINUTES * 60000).toISOString();
-    const attemptsResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/login_attempts?email=eq.${encodeURIComponent(emailNorm)}&created_at=gte.${encodeURIComponent(since)}&select=id`,
-      { headers: dbHeaders }
-    );
-    if (attemptsResp.ok) {
-      const attempts = await attemptsResp.json();
-      if (Array.isArray(attempts) && attempts.length >= MAX_ATTEMPTS) {
-        return res.status(429).json({ error: `Demasiados intentos. Esperá ${WINDOW_MINUTES} minutos e intentá de nuevo.` });
-      }
-    } else {
-      // Si el conteo falla, mejor loguear y seguir que bloquear un login
-      // legítimo por un problema ajeno a las credenciales.
-      console.error('login: no se pudo consultar login_attempts', await attemptsResp.text());
+    // Reserva este intento y cuenta cuántos hay para (emailNorm, ip) en la
+    // ventana, ANTES de tocar `users` o comparar nada — así un intento que
+    // termina resultando exitoso también reserva su lugar (y lo libera abajo
+    // con clear_login_attempts), sin la ventana entre "leer" y "guardar" que
+    // tenía la versión anterior.
+    const attemptResp = await rpc('record_login_attempt', { p_email: emailNorm, p_ip: ip, p_window_minutes: WINDOW_MINUTES });
+    if (!attemptResp.ok) {
+      console.error('login: record_login_attempt falló', await attemptResp.text());
+      return res.status(500).json({ error: 'No se pudo procesar el login, intentá de nuevo' });
+    }
+    const [{ recent_count } = {}] = await attemptResp.json();
+    if (recent_count > MAX_ATTEMPTS) {
+      return res.status(429).json({ error: `Demasiados intentos. Esperá ${WINDOW_MINUTES} minutos e intentá de nuevo.` });
     }
 
     const resp = await fetch(
@@ -91,16 +102,23 @@ module.exports = async function handler(req, res) {
     const user = rows[0];
 
     // Mismo mensaje de error si el usuario no existe o si la contraseña no
-    // matchea, para no revelar qué emails están registrados.
+    // matchea, para no revelar qué emails están registrados. El intento ya
+    // quedó contado por record_login_attempt de arriba — nada más que hacer
+    // acá salvo responder.
     if (!user || !user.password) {
-      await logFailedAttempt(emailNorm);
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      await logFailedAttempt(emailNorm);
       return res.status(401).json({ error: 'Credenciales incorrectas' });
+    }
+
+    // Login exitoso: se libera el contador de este (email, ip) — best-effort,
+    // no hace fallar un login que ya es válido si esto no se pudo guardar.
+    const clearResp = await rpc('clear_login_attempts', { p_email: emailNorm, p_ip: ip }).catch(() => null);
+    if (!clearResp || !clearResp.ok) {
+      console.error('login: clear_login_attempts falló (no bloquea el login)');
     }
 
     const { password: _omit, ...safeUser } = user;
