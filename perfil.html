@@ -188,6 +188,7 @@ const COPY = {
     stack: 'Stack técnico',
     trajectory: 'Trayectoria profesional',
     culturalFit: '🧬 Fit cultural',
+    pageTitle: 'HWG Talent — Perfil de candidato',
     fitNote: '* <strong>Cómo se calcula el fit técnico:</strong> el puntaje del 1 al 10 se construye sobre cuatro criterios evaluados contra la job description: experiencia directa en el rol (0–3 pts), dominio de herramientas y stack requerido (0–3 pts), nivel de seniority vs lo que pide la posición (0–2 pts), y logros medibles relevantes para el puesto (0–2 pts). Un puntaje de 7 o más indica recomendación para entrevistar. Entre 5 y 6, perfil a evaluar con cautela. Por debajo de 5, no recomendado para esta posición.',
     recommendation: {
       'Recomendado/a para entrevistar': 'Recomendado/a para entrevistar',
@@ -216,6 +217,7 @@ const COPY = {
     stack: 'Technical stack',
     trajectory: 'Professional background',
     culturalFit: '🧬 Cultural fit',
+    pageTitle: 'HWG Talent — Candidate profile',
     fitNote: "* <strong>How the technical fit score is calculated:</strong> the 1-to-10 score is built from four criteria evaluated against the job description: direct experience in the role (0–3 pts), command of the required tools and stack (0–3 pts), seniority level vs. what the position requires (0–2 pts), and measurable achievements relevant to the role (0–2 pts). A score of 7 or higher means recommended for interview. 5–6 means a profile to evaluate with caution. Below 5 means not recommended for this position.",
     recommendation: {
       'Recomendado/a para entrevistar': 'Recommended for interview',
@@ -230,6 +232,7 @@ function renderProfile(p) {
   const d = p.profile_data;
   const t = COPY[d.lang === 'en' ? 'en' : 'es'];
   document.documentElement.lang = d.lang === 'en' ? 'en' : 'es';
+  document.title = t.pageTitle;
 
   const today = new Date(p.published_at || Date.now())
     .toLocaleDateString(t.dateLocale, { day: '2-digit', month: 'long', year: 'numeric' });
