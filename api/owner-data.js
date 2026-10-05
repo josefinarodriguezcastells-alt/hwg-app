@@ -35,6 +35,7 @@ const ALLOWED_TABLES = new Set([
   'outreach_sequences',
   'outreach_sequence_steps',
   'word_download_log',
+  'client_secrets', // PIN de los portales de clientes (Fase 1b) — solo owner
 ]);
 
 // Tablas de uso rutinario de cualquier recruiter (no solo owner) — a

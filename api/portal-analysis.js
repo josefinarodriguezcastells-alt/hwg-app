@@ -7,8 +7,8 @@
 // prompt. Acá el navegador no manda prompt ni modelo, solo:
 // - portal_token y position_id, siempre;
 // - y además una credencial, sin la cual responde 401:
-//   - portal_pin: el PIN con el que el cliente entró, validado en la misma
-//     consulta a clients que el token (mismo criterio que tenía /api/analyze);
+//   - portal_pin: el PIN con el que el cliente entró, validado contra
+//     client_secrets (verifyPortalPin, con límite de intentos);
 //   - o la sesión del ATS de un owner (header Authorization): el owner entra
 //     al portal sin PIN, por el bypass de whoami.js.
 // El portal_token viaja en la URL del portal (/portal/:token), así que por
@@ -20,6 +20,7 @@
 // con modelo y largo fijos, y guarda positions.ai_analysis.
 
 const { requireRole } = require('./_auth');
+const { verifyPortalPin } = require('./_portal');
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 500;
@@ -118,14 +119,14 @@ async function handler(req, res) {
 
   // Sesión del ATS de un owner, o el PIN del portal: el token solo no
   // alcanza.
-  let pinFilter = '';
+  let usaPin = false;
   if (req.headers.authorization) {
     if (!requireRole(req, res, ['owner'])) return;
   } else if (portal_pin != null && portal_pin !== '') {
     // Cualquier otra cosa que no sea un string (0, false, un array) es un
     // pedido mal armado, no "sin PIN" (Greptile).
     if (typeof portal_pin !== 'string') return res.status(400).json({ error: 'portal_pin inválido' });
-    pinFilter = `&portal_pin=eq.${encodeURIComponent(portal_pin)}`;
+    usaPin = true;
   } else {
     return res.status(401).json({ error: 'Falta el PIN del portal' });
   }
@@ -156,9 +157,19 @@ async function handler(req, res) {
   };
 
   try {
-    const clients = await get(`clients?portal_token=eq.${encodeURIComponent(portal_token)}${pinFilter}&portal_active=eq.true&select=id`);
-    const client = Array.isArray(clients) ? clients[0] : null;
-    if (!client) return res.status(403).json({ error: pinFilter ? 'Portal o PIN inválido' : 'Portal inválido' });
+    // El PIN vive en client_secrets (la clave anónima no lo lee): se valida
+    // con el mismo helper —y el mismo límite de intentos— que las escrituras
+    // del portal.
+    let client;
+    if (usaPin) {
+      const result = await verifyPortalPin(req, portal_token, portal_pin);
+      if (!result.client) return res.status(result.status).json({ error: result.error });
+      client = result.client;
+    } else {
+      const clients = await get(`clients?portal_token=eq.${encodeURIComponent(portal_token)}&portal_active=eq.true&select=id`);
+      client = Array.isArray(clients) ? clients[0] : null;
+      if (!client) return res.status(403).json({ error: 'Portal inválido' });
+    }
 
     // Filtrar por client_id en la misma consulta: una posición de otro
     // cliente da lo mismo que una que no existe. Las postulaciones se leen
