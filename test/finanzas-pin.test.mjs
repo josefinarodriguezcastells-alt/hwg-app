@@ -282,3 +282,11 @@ test('registro: se puede leer con el token de Finanzas', async () => {
   assert.equal(r.status, 200);
   assert.equal((await r.json()).length, 1);
 });
+
+// ── CORS: el navegador solo manda X-Finanzas-Token si el servidor lo permite ──
+test('owner-data: el preflight CORS permite la cabecera X-Finanzas-Token (sin esto el navegador no la manda y Finanzas queda bloqueado)', async () => {
+  const r = await realFetch(`${dataSrv.url}/?table=billing`, { method: 'OPTIONS' });
+  const permitidas = (r.headers.get('access-control-allow-headers') || '').toLowerCase();
+  assert.ok(permitidas.includes('x-finanzas-token'), permitidas);
+  assert.ok(permitidas.includes('authorization'));
+});
