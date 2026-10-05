@@ -23,14 +23,64 @@ async function sbGet(path) {
   return data;
 }
 
-// Cliente {id, name} de un portal activo, o null. `portalPin`, si viene, se
-// suma al filtro — ver resolvePortalWriter, que es quien decide cuándo
-// hace falta.
-async function resolvePortalClient(portalToken, portalPin) {
+// Cliente {id, name} de un portal activo, o null. No mira el PIN — para eso
+// está verifyPortalPin (el PIN vive en client_secrets, que la clave anónima
+// no puede leer).
+async function resolvePortalClient(portalToken) {
   if (typeof portalToken !== 'string' || !portalToken) return null;
-  const pinFilter = portalPin ? `&portal_pin=eq.${encodeURIComponent(portalPin)}` : '';
-  const rows = await sbGet(`clients?portal_token=eq.${encodeURIComponent(portalToken)}${pinFilter}&portal_active=eq.true&select=id,name`);
+  const rows = await sbGet(`clients?portal_token=eq.${encodeURIComponent(portalToken)}&portal_active=eq.true&select=id,name`);
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+// Un PIN de 4 dígitos son solo 10.000 combinaciones: sin freno se prueban
+// todas en minutos. Mismo mecanismo que api/login.js (record_login_attempt /
+// clear_login_attempts, ver sql/login-attempts-table.sql), con la clave
+// `portal:<token>` + IP. 10 intentos por 15 minutos alcanzan de sobra para
+// alguien que se equivoca tipeando.
+const PIN_MAX_ATTEMPTS = 10;
+const PIN_WINDOW_MINUTES = 15;
+
+function clientIp(req) {
+  const fwd = req.headers['x-forwarded-for'];
+  const first = (Array.isArray(fwd) ? fwd[0] : fwd || '').split(',')[0].trim();
+  return first || 'sin-ip';
+}
+
+async function sbRpc(fn, args) {
+  return fetch(`${process.env.SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify(args),
+  });
+}
+
+// Valida token + PIN contra client_secrets. Devuelve {client:{id,name}} si
+// es correcto, o {status, error} si no (el caller responde con eso). Falla
+// cerrado: si no se puede contar el intento, no se deja pasar.
+async function verifyPortalPin(req, portalToken, portalPin) {
+  if (typeof portalToken !== 'string' || !portalToken) return { status: 400, error: 'Falta el portal_token' };
+  if (typeof portalPin !== 'string' || !portalPin) return { status: 400, error: 'portal_pin inválido' };
+
+  const key = `portal:${portalToken}`;
+  const ip = clientIp(req);
+  const attemptResp = await sbRpc('record_login_attempt', { p_email: key, p_ip: ip, p_window_minutes: PIN_WINDOW_MINUTES });
+  if (!attemptResp.ok) {
+    console.error('verifyPortalPin: record_login_attempt falló', await attemptResp.text());
+    return { status: 500, error: 'No se pudo validar el PIN, intentá de nuevo' };
+  }
+  const [{ recent_count } = {}] = await attemptResp.json();
+  if (recent_count > PIN_MAX_ATTEMPTS) {
+    return { status: 429, error: `Demasiados intentos. Esperá ${PIN_WINDOW_MINUTES} minutos e intentá de nuevo.` };
+  }
+
+  const client = await resolvePortalClient(portalToken);
+  if (!client) return { status: 403, error: 'Portal o PIN inválido' };
+  const rows = await sbGet(`client_secrets?client_id=eq.${encodeURIComponent(client.id)}&portal_pin=eq.${encodeURIComponent(portalPin)}&select=client_id`);
+  if (!Array.isArray(rows) || !rows[0]) return { status: 403, error: 'Portal o PIN inválido' };
+
+  // PIN correcto: se libera el contador (best-effort, igual que en login).
+  await sbRpc('clear_login_attempts', { p_email: key, p_ip: ip }).catch(() => null);
+  return { client };
 }
 
 // Auditoría de los 20 endpoints: portal-candidate-action, notify-message,
@@ -65,9 +115,9 @@ async function resolvePortalWriter(req, res, portalToken, portalPin) {
     res.status(400).json({ error: 'portal_pin inválido' });
     return null;
   }
-  const client = await resolvePortalClient(portalToken, portalPin);
-  if (!client) { res.status(403).json({ error: 'Portal o PIN inválido' }); return null; }
-  return client;
+  const result = await verifyPortalPin(req, portalToken, portalPin);
+  if (!result.client) { res.status(result.status).json({ error: result.error }); return null; }
+  return result.client;
 }
 
 // Recruiter {email, name} asignado a alguna posición del cliente cuyo mail
@@ -95,4 +145,4 @@ async function findClientRecruiter(clientId, email) {
   return null;
 }
 
-module.exports = { EMAIL_RE, escapeHtml, resolvePortalClient, resolvePortalWriter, findClientRecruiter };
+module.exports = { EMAIL_RE, escapeHtml, resolvePortalClient, resolvePortalWriter, verifyPortalPin, findClientRecruiter };
