@@ -19,6 +19,9 @@ create table if not exists client_secrets (
 
 alter table client_secrets enable row level security;
 revoke all on client_secrets from anon, authenticated;
+-- Supabase ya no da permisos automáticos a las tablas nuevas: sin esto el
+-- servidor (service_role) tampoco podía leerla ("permission denied").
+grant all on client_secrets to service_role;
 
 insert into client_secrets (client_id, portal_pin)
 select id, portal_pin from clients
