@@ -9,6 +9,7 @@
 
 import { test, beforeEach } from 'node:test';
 import { createRequire } from 'node:module';
+import { portalPinMock, reiniciarIntentos } from './_portal-pin-mock.mjs';
 import assert from 'node:assert/strict';
 
 process.env.SUPABASE_URL = 'https://fake.supabase.co';
@@ -50,6 +51,7 @@ globalThis.fetch = async (url, opts = {}) => {
     return new Response(JSON.stringify({ id: 'mail-fake' }), { status: 200 });
   }
   if (url.startsWith('https://fake.supabase.co/rest/v1/')) {
+    { const pm = portalPinMock(url, opts, DB.clients); if (pm) return pm; }
     const u = new URL(url);
     const table = u.pathname.split('/').pop();
     let rows = DB[table].filter(r => [...u.searchParams].every(([k, v]) =>

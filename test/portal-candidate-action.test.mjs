@@ -11,6 +11,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { portalPinMock, reiniciarIntentos } from './_portal-pin-mock.mjs';
 
 const require = createRequire(import.meta.url);
 const jwt = require('jsonwebtoken');
@@ -32,6 +33,7 @@ const POSITION_RECRUITERS = [{ position_id: 'p1', recruiter_id: 'u1' }];
 
 let applications, statusHistory, notes, mails, bearer;
 beforeEach(() => {
+  reiniciarIntentos();
   applications = [{ id: 'a1111111-1111-4111-8111-111111111111', status: 'submitted', candidate_id: 'k1', position_id: 'p1' }];
   statusHistory = [];
   notes = [];
@@ -50,6 +52,7 @@ globalThis.fetch = async (url, opts = {}) => {
     return json({ id: 'mail-fake' });
   }
   if (!url.startsWith('https://fake.supabase.co/rest/v1/')) throw new Error('fetch no mockeado: ' + url);
+  { const pm = portalPinMock(url, opts, CLIENTS); if (pm) return pm; }
   const table = new URL(url).pathname.split('/').pop();
 
   if (table === 'clients') {
@@ -132,6 +135,19 @@ test('PIN incorrecto → 403, no toca applications', async () => {
   const r = await call(req({ portal_pin: '0000' }));
   assert.equal(r.status, 403);
   assert.equal(applications[0].status, 'submitted');
+});
+
+test('freno de intentos: tras 10 PIN incorrectos seguidos, hasta el PIN correcto da 429 (10.000 combinaciones se probaban todas en minutos)', async () => {
+  for (let i = 0; i < 10; i++) assert.equal((await call(req({ portal_pin: '0000' }))).status, 403);
+  const r = await call(req());
+  assert.equal(r.status, 429);
+  assert.equal(applications[0].status, 'submitted');
+});
+
+test('freno de intentos: un PIN correcto limpia el contador', async () => {
+  for (let i = 0; i < 9; i++) await call(req({ portal_pin: '0000' }));
+  assert.notEqual((await call(req())).status, 429);
+  for (let i = 0; i < 10; i++) assert.equal((await call(req({ portal_pin: '0000' }))).status, 403);
 });
 
 test('portal inactivo (con su PIN correcto) → 403', async () => {

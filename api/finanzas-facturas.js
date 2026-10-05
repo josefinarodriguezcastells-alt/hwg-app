@@ -6,9 +6,13 @@
 // valida la forma del pedido y se pasa el usuario de la sesión como actor —
 // nunca uno que mande el cliente.
 //
-// Solo owner (Finanzas ya es exclusiva del owner, ver owner-data.js).
+// Solo owner (Finanzas ya es exclusiva del owner, ver owner-data.js) y, como
+// en owner-data.js, con el token del PIN de Finanzas cuando está activo. Las
+// tres operaciones quedan en finanzas_log (lo escriben las funciones de la
+// base, con el mail de quien las hizo).
 
-const { requireRole } = require('./_auth');
+const { requireRole, hasFinanzasToken } = require('./_auth');
+const { ENFORCE_PIN } = require('./_finanzas');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -44,13 +48,17 @@ function limpiarLineas(lineas) {
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Finanzas-Token');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const session = requireRole(req, res, ['owner']);
   if (!session) return;
   if (!isUuid(session.id)) return res.status(401).json({ error: 'Sesión sin usuario válido, volvé a entrar.' });
+  // Mismo PIN de Finanzas que exige owner-data.js para las tablas de plata.
+  if (ENFORCE_PIN && !hasFinanzasToken(req, session)) {
+    return res.status(403).json({ error: 'PIN de Finanzas requerido', code: 'finanzas_pin' });
+  }
 
   const { accion } = req.body || {};
   const b = req.body || {};
