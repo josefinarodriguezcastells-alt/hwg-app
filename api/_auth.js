@@ -48,4 +48,25 @@ function requireRole(req, res, allowedRoles) {
   return payload;
 }
 
-module.exports = { signSession, requireRole };
+// Token corto que prueba "esta sesión del owner ya tipeó el PIN de Finanzas".
+// Se firma con el mismo secreto pero lleva kind:'finanzas' y el id del owner,
+// así no sirve como sesión del ATS ni se puede usar con la sesión de otra
+// persona. Dura 12 horas: pasado eso hay que volver a poner el PIN.
+function signFinanzas(session) {
+  return jwt.sign({ id: session.id, kind: 'finanzas' }, process.env.SESSION_SECRET, { expiresIn: '12h' });
+}
+
+// true si el header X-Finanzas-Token es un token de Finanzas válido de ESTA
+// sesión. No manda respuesta: el caller decide qué hacer.
+function hasFinanzasToken(req, session) {
+  const token = req.headers['x-finanzas-token'];
+  if (!token || !process.env.SESSION_SECRET) return false;
+  try {
+    const p = jwt.verify(String(token), process.env.SESSION_SECRET);
+    return p.kind === 'finanzas' && p.id === session.id;
+  } catch (e) {
+    return false;
+  }
+}
+
+module.exports = { signSession, requireRole, signFinanzas, hasFinanzasToken };

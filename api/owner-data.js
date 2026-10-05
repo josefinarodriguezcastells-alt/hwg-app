@@ -22,7 +22,8 @@
 // puede mantener la misma sintaxis de encadenado que ya se usaba.
 
 const bcrypt = require('bcryptjs');
-const { requireRole } = require('./_auth');
+const { requireRole, hasFinanzasToken } = require('./_auth');
+const { FINANZAS_TABLES, LOGGED_TABLES, ENFORCE_PIN, filasLogPatch } = require('./_finanzas');
 
 const ALLOWED_TABLES = new Set([
   'billing',
@@ -37,6 +38,9 @@ const ALLOWED_TABLES = new Set([
   'word_download_log',
   'client_secrets', // PIN de los portales de clientes (Fase 1b) — solo owner
   'client_stakeholders', // Fase 2: stakeholders del cliente — owner y recruiter
+  'finanzas_log', // registro de cambios de Finanzas — solo lectura, solo owner
+  'tipo_cambio', // tipo de cambio oficial por mes — owner
+  'client_finanzas', // plazo de pago por cliente — owner
   'lead_contacts', // Fase 2: contacto comercial de un lead — solo owner
 ]);
 
@@ -73,6 +77,20 @@ module.exports = async function handler(req, res) {
   const session = requireRole(req, res, allowedRoles);
   if (!session) return;
 
+  // El registro de cambios es de solo lectura: lo escribe este mismo archivo.
+  if (table === 'finanzas_log' && req.method !== 'GET') return res.status(405).json({ error: 'Solo lectura' });
+
+  // PIN de Finanzas: las tablas de plata exigen el token que entrega
+  // api/finanzas-pin.js después de validar el PIN. Excepción: billing POST
+  // (cualquier recruiter crea el registro al confirmar un hire). Mientras
+  // ENFORCE_PIN sea false el servidor deja pasar pedidos sin token (período de
+  // transición, ver _finanzas.js).
+  const exigePin = FINANZAS_TABLES.has(table) || table === 'tipo_cambio' || table === 'client_finanzas';
+  const esAltaDeHire = table === 'billing' && req.method === 'POST';
+  if (ENFORCE_PIN && exigePin && !esAltaDeHire && !hasFinanzasToken(req, session)) {
+    return res.status(403).json({ error: 'PIN de Finanzas requerido', code: 'finanzas_pin' });
+  }
+
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
@@ -101,6 +119,31 @@ module.exports = async function handler(req, res) {
     return Array.isArray(data) ? data.map(stripPassword) : stripPassword(data);
   };
 
+  // Registro de cambios (finanzas_log). Quién (mail de la sesión), cuándo (la
+  // base pone la fecha), qué tabla/fila, y el antes/después de lo que cambió.
+  const logueada = LOGGED_TABLES.has(table);
+  const usuario = { id: session.id, email: session.email };
+  const filtrosSolo = () => {
+    const q = new URLSearchParams(params);
+    ['select', 'order', 'limit', 'offset'].forEach((k) => q.delete(k));
+    q.set('select', '*');
+    return q;
+  };
+  const leerFilas = async () => {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filtrosSolo()}`, { headers: baseHeaders });
+    const d = await r.json();
+    if (!r.ok) throw new Error('No se pudieron leer las filas previas');
+    return d;
+  };
+  const escribirLog = async (filas) => {
+    if (!filas.length) return true;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/finanzas_log`, {
+      method: 'POST', headers: { ...baseHeaders, Prefer: 'return=minimal' }, body: JSON.stringify(filas),
+    });
+    if (!r.ok) console.error('finanzas_log: no se pudo escribir', await r.text());
+    return r.ok;
+  };
+
   try {
     if (req.method === 'GET') {
       const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, { headers: baseHeaders });
@@ -125,6 +168,11 @@ module.exports = async function handler(req, res) {
       });
       const data = await resp.json();
       if (!resp.ok) return res.status(resp.status).json({ error: data });
+      if (logueada) {
+        await escribirLog((Array.isArray(data) ? data : [data]).map((f) => ({
+          user_id: usuario.id, user_name: usuario.email, tabla: table, row_id: String(f.id), accion: 'crear', antes: null, despues: f,
+        })));
+      }
       return res.status(200).json(sanitize(data));
     }
 
@@ -134,6 +182,7 @@ module.exports = async function handler(req, res) {
         if (body.password) body.password = await bcrypt.hash(body.password, 10);
         else delete body.password; // nunca pisar el hash existente con string vacío
       }
+      const filasPrevias = logueada ? await leerFilas() : [];
       const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
         method: 'PATCH',
         headers: { ...baseHeaders, Prefer: 'return=representation' },
@@ -141,10 +190,20 @@ module.exports = async function handler(req, res) {
       });
       const data = await resp.json();
       if (!resp.ok) return res.status(resp.status).json({ error: data });
+      if (logueada) await escribirLog(filasLogPatch({ tabla: table, filas: filasPrevias, body, usuario }));
       return res.status(200).json(sanitize(data));
     }
 
     if (req.method === 'DELETE') {
+      // Se loguea ANTES de borrar y con la fila completa: no se puede borrar
+      // plata sin dejar rastro (si el log falla, no se borra).
+      if (logueada) {
+        const filas = await leerFilas();
+        const ok = await escribirLog(filas.map((f) => ({
+          user_id: usuario.id, user_name: usuario.email, tabla: table, row_id: String(f.id), accion: 'borrar', antes: f, despues: null,
+        })));
+        if (!ok) return res.status(500).json({ error: 'No se pudo registrar el borrado; no se borró nada' });
+      }
       const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
         method: 'DELETE',
         headers: baseHeaders,
