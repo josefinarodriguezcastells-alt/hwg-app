@@ -36,6 +36,8 @@ const ALLOWED_TABLES = new Set([
   'outreach_sequence_steps',
   'word_download_log',
   'client_secrets', // PIN de los portales de clientes (Fase 1b) — solo owner
+  'client_stakeholders', // Fase 2: stakeholders del cliente — owner y recruiter
+  'lead_contacts', // Fase 2: contacto comercial de un lead — solo owner
 ]);
 
 // Tablas de uso rutinario de cualquier recruiter (no solo owner) — a
@@ -46,6 +48,7 @@ const RECRUITER_TABLES = new Set([
   'outreach_sequences',
   'outreach_sequence_steps',
   'word_download_log',
+  'client_stakeholders',
 ]);
 
 module.exports = async function handler(req, res) {
