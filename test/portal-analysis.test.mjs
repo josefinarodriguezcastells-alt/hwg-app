@@ -9,6 +9,7 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { createRequire } from 'node:module';
+import { portalPinMock, reiniciarIntentos } from './_portal-pin-mock.mjs';
 
 const require = createRequire(import.meta.url);
 const jwt = require('jsonwebtoken');
@@ -101,6 +102,7 @@ globalThis.fetch = async (url, opts = {}) => {
     return json(aiReply.body, aiReply.status);
   }
   if (url.startsWith('https://fake.supabase.co/rest/v1/')) {
+    { const pm = portalPinMock(url, opts, CLIENTS); if (pm) return pm; }
     const table = new URL(url).pathname.split('/').pop();
     if (opts.method === 'PATCH') {
       calls.patch.push({ url, body: JSON.parse(opts.body) });
@@ -177,14 +179,16 @@ test('portal_token de un cliente que existe pero está desactivado → 403 sin l
   assert.equal(calls.patch.length, 0);
 });
 
-test('el PIN se valida en la misma consulta que el token y portal_active', async () => {
+test('el cliente se busca por token y portal_active; el PIN NUNCA va en la consulta a clients (vive en client_secrets, Fase 1b)', async () => {
   const r = await post({ portal_token: 'PORTAL_OK', portal_pin: PIN, position_id: P1 });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   const cq = calls.supabase.filter(c => c.table === 'clients');
-  assert.equal(cq.length, 1);
-  assert.equal(q(cq[0].url, 'portal_token'), 'eq.PORTAL_OK');
-  assert.equal(q(cq[0].url, 'portal_pin'), `eq.${PIN}`);
-  assert.equal(q(cq[0].url, 'portal_active'), 'eq.true');
+  assert.ok(cq.length >= 1);
+  for (const c of cq) {
+    assert.equal(q(c.url, 'portal_token'), 'eq.PORTAL_OK');
+    assert.equal(q(c.url, 'portal_active'), 'eq.true');
+    assert.equal(q(c.url, 'portal_pin'), null, 'el PIN no se manda a clients');
+  }
 });
 
 test('PIN incorrecto → 403 sin llegar a la IA ni guardar', async () => {

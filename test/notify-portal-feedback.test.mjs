@@ -8,6 +8,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { portalPinMock, reiniciarIntentos } from './_portal-pin-mock.mjs';
 
 const require = createRequire(import.meta.url);
 const jwt = require('jsonwebtoken');
@@ -46,6 +47,7 @@ globalThis.fetch = async (url, opts = {}) => {
     return json({ id: 'mail-fake' });
   }
   if (!url.startsWith('https://fake.supabase.co/rest/v1/')) throw new Error('fetch no mockeado: ' + url);
+  { const pm = portalPinMock(url, opts, CLIENTS); if (pm) return pm; }
   const table = new URL(url).pathname.split('/').pop();
 
   if (table === 'clients') {
