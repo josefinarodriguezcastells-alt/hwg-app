@@ -30,12 +30,31 @@ const ALLOWED_TABLES = new Set([
   'embedded_nomina_personas',
   'embedded_nomina',
   'entidades_facturadoras',
+  'factura_items',
+  'finanzas_auditoria',
   'users',
   'candidate_presentations',
   'outreach_sequences',
   'outreach_sequence_steps',
   'word_download_log',
 ]);
+
+// Solo lectura desde acá: factura_items y finanzas_auditoria las escriben las
+// funciones de facturación (api/finanzas-facturas.js) y los triggers de la base.
+const READ_ONLY_TABLES = new Set(['factura_items', 'finanzas_auditoria']);
+
+// Tablas donde cada alta/cambio/baja deja al usuario de la sesión como autor
+// (la base lo guarda en updated_by y lo copia a finanzas_auditoria).
+const AUDITED_TABLES = new Set(['billing', 'facturas']);
+
+// Campos de facturas que solo pueden cambiar las funciones de facturación
+// (emitir / anular / cobrar), nunca un PATCH suelto: el número, los montos y
+// el estado son lo que se audita.
+const FACTURAS_PROTEGIDOS = [
+  'numero', 'total', 'items', 'moneda', 'client_id', 'tipo', 'estado', 'fecha_cobro',
+  'emitida_at', 'emitida_por', 'fecha_emision', 'tc_dia',
+  'anulada_at', 'anulada_por', 'anulada_motivo', 'created_by', 'created_at',
+];
 
 // Tablas de uso rutinario de cualquier recruiter (no solo owner) — a
 // diferencia de billing/facturas/nómina/usuarios, que siguen siendo
@@ -56,6 +75,12 @@ module.exports = async function handler(req, res) {
   const { table, ...rawParams } = req.query || {};
   if (!table || !ALLOWED_TABLES.has(table)) {
     return res.status(400).json({ error: 'Tabla no permitida' });
+  }
+  if (READ_ONLY_TABLES.has(table) && req.method !== 'GET' && req.method !== 'OPTIONS') {
+    return res.status(405).json({ error: 'Esta tabla es de solo lectura' });
+  }
+  if (table === 'facturas' && req.method === 'POST') {
+    return res.status(405).json({ error: 'Las facturas se emiten con /api/finanzas-facturas (numeración correlativa).' });
   }
 
   // Excepción puntual: cualquier recruiter puede crear (no leer/editar/borrar)
@@ -92,6 +117,29 @@ module.exports = async function handler(req, res) {
     const { password, ...rest } = row;
     return rest;
   };
+  // El autor sale siempre de la sesión (JWT), nunca de lo que mande el cliente.
+  const stamp = (body) => {
+    const marca = { updated_by: session.id, updated_at: new Date().toISOString() };
+    return Array.isArray(body) ? body.map((r) => ({ ...r, ...marca })) : { ...body, ...marca };
+  };
+  // Antes de correr la migración de Finanzas (2026-10-05b) las columnas
+  // updated_by/updated_at no existen y PostgREST rechaza el pedido. Para no
+  // cortar escrituras de producción (incluida la alta de billing que hace un
+  // recruiter al confirmar una contratación) se reintenta sin el sello: la
+  // auditoría arranca sola apenas existe la columna.
+  const sinSello = (body) => {
+    const quitar = ({ updated_by, updated_at, ...resto }) => resto;
+    return Array.isArray(body) ? body.map(quitar) : quitar(body);
+  };
+  const sendConSello = async (method, body, headers) => {
+    const go = (b) => fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, { method, headers, body: JSON.stringify(b) });
+    let resp = await go(body);
+    if (!resp.ok && AUDITED_TABLES.has(table)) {
+      const texto = await resp.clone().text();
+      if (/updated_by|updated_at/.test(texto)) resp = await go(sinSello(body));
+    }
+    return resp;
+  };
   const sanitize = (data) => {
     if (table !== 'users') return data;
     return Array.isArray(data) ? data.map(stripPassword) : stripPassword(data);
@@ -114,11 +162,8 @@ module.exports = async function handler(req, res) {
         }
         body = rows;
       }
-      const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
-        method: 'POST',
-        headers: { ...baseHeaders, Prefer: 'return=representation' },
-        body: JSON.stringify(body),
-      });
+      if (AUDITED_TABLES.has(table)) body = stamp(body);
+      const resp = await sendConSello('POST', body, { ...baseHeaders, Prefer: 'return=representation' });
       const data = await resp.json();
       if (!resp.ok) return res.status(resp.status).json({ error: data });
       return res.status(200).json(sanitize(data));
@@ -130,17 +175,31 @@ module.exports = async function handler(req, res) {
         if (body.password) body.password = await bcrypt.hash(body.password, 10);
         else delete body.password; // nunca pisar el hash existente con string vacío
       }
-      const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
-        method: 'PATCH',
-        headers: { ...baseHeaders, Prefer: 'return=representation' },
-        body: JSON.stringify(body),
-      });
+      if (table === 'facturas') {
+        const prohibidos = FACTURAS_PROTEGIDOS.filter((k) => k in body);
+        if (prohibidos.length) {
+          return res.status(400).json({ error: `Estos campos de una factura solo se cambian emitiendo, anulando o cobrando desde Finanzas: ${prohibidos.join(', ')}.` });
+        }
+      }
+      if (table === 'billing' && 'factura_id' in body) {
+        return res.status(400).json({ error: 'El vínculo con la factura solo lo maneja la facturación.' });
+      }
+      const patchBody = AUDITED_TABLES.has(table) ? stamp(body) : body;
+      const resp = await sendConSello('PATCH', patchBody, { ...baseHeaders, Prefer: 'return=representation' });
       const data = await resp.json();
       if (!resp.ok) return res.status(resp.status).json({ error: data });
       return res.status(200).json(sanitize(data));
     }
 
     if (req.method === 'DELETE') {
+      if (AUDITED_TABLES.has(table)) {
+        // Queda quién borró: el trigger de auditoría guarda updated_by de la fila.
+        await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
+          method: 'PATCH',
+          headers: baseHeaders,
+          body: JSON.stringify(stamp({})),
+        }).catch(() => null);
+      }
       const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
         method: 'DELETE',
         headers: baseHeaders,
