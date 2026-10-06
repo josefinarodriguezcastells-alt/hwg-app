@@ -6,9 +6,11 @@
 // valida acá, con límite de intentos (ver verifyPortalPin en _portal.js).
 //
 // Devuelve solo las columnas que el portal necesita después de entrar —
-// nunca el PIN.
+// nunca el PIN — y una sesión corta de portal (12 h) que usan los pedidos de
+// datos del portal (api/portal-db) en vez de volver a mandar el PIN cada vez.
 
 const { verifyPortalPin } = require('./_portal');
+const { signPortal } = require('./_auth');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -32,7 +34,7 @@ module.exports = async function handler(req, res) {
     );
     const rows = await resp.json();
     if (!resp.ok || !rows[0]) return res.status(500).json({ error: 'No se pudo cargar el portal' });
-    return res.status(200).json({ client: rows[0] });
+    return res.status(200).json({ client: rows[0], session: signPortal(rows[0].id) });
   } catch (e) {
     console.error('portal-verify error:', e);
     return res.status(500).json({ error: 'Error validando el PIN' });
