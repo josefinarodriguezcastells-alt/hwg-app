@@ -22,8 +22,11 @@ const TABLAS = {
   client_portal_notes: { rw: ['owner', 'recruiter'] },
   client_portal_activity: { rw: ['owner', 'recruiter'] },
   client_position_requests: { rw: ['owner', 'recruiter'] },
-  // clients: los recruiters leen solo clientes (no leads) y no escriben.
-  clients: { rw: ['owner'], recruiterSoloClientes: true },
+  // clients: los recruiters leen solo clientes (no leads) y solo pueden
+  // cambiar, de UN cliente a la vez, su estado (activo/inactivo: la app lo
+  // hace sola al cerrar la última posición o reabrir una) y la cultura
+  // (CulturaInline). Nada más: ni portal, ni PIN, ni contactos, ni alta/baja.
+  clients: { rw: ['owner'], recruiterSoloClientes: true, recruiterPatch: ['status', 'cultural_tags', 'cultural_comment'] },
 };
 
 // Relaciones que se pueden incrustar en un select (las mismas tablas, más
@@ -70,11 +73,21 @@ function validarSelect(select) {
 // Arma el querystring que se manda a PostgREST. `entrada` es URLSearchParams
 // de lo que mandó el cliente (sin el parámetro propio del proxy).
 // Devuelve { error } o { query }.
-function armarConsulta({ tabla, rol, metodo, entrada }) {
+function armarConsulta({ tabla, rol, metodo, entrada, body }) {
   const cfg = TABLAS[tabla];
   if (!cfg) return { error: 'Tabla no permitida', status: 400 };
   const esLectura = metodo === 'GET' || metodo === 'HEAD';
-  if (!esLectura && !cfg.rw.includes(rol)) return { error: 'No tenés permiso para modificar esta tabla', status: 403 };
+  if (!esLectura && !cfg.rw.includes(rol)) {
+    // Excepción acotada: PATCH de columnas permitidas sobre UNA fila (id=eq.X).
+    const patchAcotado = cfg.recruiterPatch && rol === 'recruiter' && metodo === 'PATCH';
+    if (!patchAcotado) return { error: 'No tenés permiso para modificar esta tabla', status: 403 };
+    const claves = body && typeof body === 'object' && !Array.isArray(body) ? Object.keys(body) : [];
+    if (!claves.length || claves.some((k) => !cfg.recruiterPatch.includes(k))) return { error: 'Solo podés cambiar el estado o la cultura del cliente', status: 403 };
+    if (body.status !== undefined && !['active', 'inactive'].includes(body.status)) return { error: 'Estado inválido', status: 403 };
+    const ids = entrada.getAll('id');
+    if (ids.length !== 1 || !/^eq\.[0-9a-f-]{36}$/i.test(ids[0])) return { error: 'Hay que indicar un solo cliente', status: 403 };
+    for (const k of entrada.keys()) if (!['id', 'select'].includes(k)) return { error: 'Filtro no permitido para esta modificación', status: 403 };
+  }
 
   const q = new URLSearchParams(entrada);
   const motivo = validarSelect(q.get('select'));

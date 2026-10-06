@@ -158,3 +158,38 @@ test('recruiter: escribe candidatos, postulaciones y scorecards (como hoy)', asy
     assert.equal((await call(`__t=${t}&id=eq.1`, { method: 'PATCH', token: RECRUITER, body: { notes: 'x' } })).status, 200, t);
   }
 });
+
+// ── recruiter: lo único que puede cambiar de un cliente (flujo de confirmar hire) ──
+const UUID = '11111111-1111-4111-8111-111111111111';
+test('recruiter: puede pasar UN cliente a inactivo/activo (se hace solo al cerrar la última posición)', async () => {
+  for (const status of ['inactive', 'active']) {
+    const r = await call(`__t=clients&id=eq.${UUID}`, { method: 'PATCH', token: RECRUITER, body: { status } });
+    assert.equal(r.status, 200, status);
+  }
+  assert.equal(llamadas.length, 2);
+  assert.equal(new URL(llamadas[0].url).searchParams.get('id'), 'eq.' + UUID);
+});
+test('recruiter: puede editar la cultura del cliente (tags y comentario)', async () => {
+  const r = await call(`__t=clients&id=eq.${UUID}`, { method: 'PATCH', token: RECRUITER, body: { cultural_tags: ['x'], cultural_comment: 'y' } });
+  assert.equal(r.status, 200);
+});
+test('recruiter: nada más sobre clientes (portal, PIN, nombre, contactos, estado inválido, sin id o con varios, filtros extra)', async () => {
+  const malos = [
+    [`id=eq.${UUID}`, { portal_active: false }], [`id=eq.${UUID}`, { portal_token: 'x' }], [`id=eq.${UUID}`, { portal_permissions: {} }],
+    [`id=eq.${UUID}`, { name: 'x' }], [`id=eq.${UUID}`, { status: 'inactive', is_lead: true }], [`id=eq.${UUID}`, { status: 'borrado' }],
+    [`id=eq.${UUID}`, {}], [`id=eq.${UUID}`, [{ status: 'inactive' }]],
+    ['', { status: 'inactive' }],                                  // sin id: tocaría a todos
+    [`id=in.(${UUID},${UUID})`, { status: 'inactive' }],            // varios
+    [`id=eq.${UUID}&id=eq.${UUID}`, { status: 'inactive' }],
+    [`id=eq.${UUID}&status=neq.x`, { status: 'inactive' }],         // filtros extra
+    [`or=(id.eq.${UUID})`, { status: 'inactive' }],
+    ['id=eq.1', { status: 'inactive' }],
+  ];
+  for (const [qs, body] of malos) assert.equal((await call(`__t=clients${qs ? '&' + qs : ''}`, { method: 'PATCH', token: RECRUITER, body })).status, 403, qs + ' ' + JSON.stringify(body));
+  assert.equal(llamadas.length, 0, 'ninguna llegó a la base');
+});
+test('recruiter: sigue sin poder crear ni borrar clientes, y la excepción no se extiende a otras tablas', async () => {
+  assert.equal((await call('__t=clients', { method: 'POST', token: RECRUITER, body: [{ status: 'active' }] })).status, 403);
+  assert.equal((await call(`__t=clients&id=eq.${UUID}`, { method: 'DELETE', token: RECRUITER })).status, 403);
+  assert.equal(llamadas.length, 0);
+});
