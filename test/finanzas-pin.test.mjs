@@ -198,7 +198,7 @@ test('owner-data: sin token de Finanzas, las tablas de plata dan 403 con code fi
   const r = await data('table=billing&select=*');
   assert.equal(r.status, 403);
   assert.equal((await r.json()).code, 'finanzas_pin');
-  for (const t of ['facturas', 'embedded_nomina', 'embedded_nomina_personas', 'finanzas_log']) {
+  for (const t of ['facturas', 'embedded_nomina', 'embedded_nomina_personas', 'finanzas_log', 'finanzas_resultados']) {
     db[t] = db[t] || [];
     assert.equal((await data(`table=${t}&select=*`)).status, 403, t);
   }

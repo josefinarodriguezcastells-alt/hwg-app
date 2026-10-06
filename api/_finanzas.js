@@ -10,6 +10,7 @@ const FINANZAS_TABLES = new Set([
   'embedded_nomina_personas',
   'embedded_nomina',
   'finanzas_log',
+  'finanzas_resultados',
 ]);
 
 // Tablas cuyos cambios quedan en finanzas_log (quién, cuándo, antes/después).
