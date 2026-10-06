@@ -127,7 +127,11 @@ test('POST/PATCH reenvían el cuerpo; DELETE 204 sin cuerpo; los errores de la b
 test('el preflight CORS permite Prefer y Range y expone Content-Range', async () => {
   const r = await realFetch(`${srv.url}/?__t=candidates`, { method: 'OPTIONS' });
   const ok = (r.headers.get('access-control-allow-headers') || '').toLowerCase();
-  for (const h of ['authorization', 'prefer', 'range', 'range-unit', 'accept']) assert.ok(ok.includes(h), h);
+  // Las cabeceras que manda de verdad supabase-js (Accept-Profile / Content-Profile
+  // las agrega siempre postgrest-js: sin permitirlas el navegador bloquea TODOS
+  // los pedidos con "estado 0") — hwg_ats/tests/db-proxy-cliente.test.mjs
+  // verifica que esta lista cubra lo que la librería manda.
+  for (const h of ['authorization', 'prefer', 'range', 'range-unit', 'accept', 'accept-profile', 'content-profile', 'x-client-info', 'x-supabase-api-version', 'content-type']) assert.ok(ok.includes(h), h);
   assert.ok((r.headers.get('access-control-expose-headers') || '').toLowerCase().includes('content-range'));
 });
 
