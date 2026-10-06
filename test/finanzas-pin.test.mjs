@@ -290,3 +290,10 @@ test('owner-data: el preflight CORS permite la cabecera X-Finanzas-Token (sin es
   assert.ok(permitidas.includes('x-finanzas-token'), permitidas);
   assert.ok(permitidas.includes('authorization'));
 });
+
+// ── el valor por defecto: sin variable de entorno, la exigencia está PRENDIDA ──
+test('_finanzas: sin FINANZAS_PIN_ENFORCE en el entorno el PIN se exige (valor por defecto)', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const r = spawnSync(process.execPath, ['-e', "delete process.env.FINANZAS_PIN_ENFORCE; console.log(require('./api/_finanzas.js').ENFORCE_PIN)"], { cwd: new URL('..', import.meta.url).pathname, encoding: 'utf8' });
+  assert.equal(r.stdout.trim(), 'true');
+});
