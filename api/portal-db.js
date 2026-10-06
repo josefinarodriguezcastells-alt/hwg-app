@@ -102,6 +102,13 @@ module.exports = async function handler(req, res) {
           q.append('id', `in.(${ids.length ? ids.join(',') : NADA})`);
           break;
         }
+        case 'users_public': {
+          // Solo los recruiters asignados a las posiciones de este cliente.
+          const recs = posIds.length ? await leer(`position_recruiters?position_id=in.(${posIds.join(',')})&select=recruiter_id`) : [];
+          const ids = [...new Set(recs.map((r) => r.recruiter_id).filter(Boolean))];
+          q.append('id', `in.(${ids.length ? ids.join(',') : NADA})`);
+          break;
+        }
         default: break;
       }
       // Escrituras con ids propios: que apunten a recursos de este cliente.

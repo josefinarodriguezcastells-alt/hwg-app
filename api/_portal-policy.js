@@ -13,6 +13,8 @@ const CANDIDATES_BASE = ['id', 'name'];
 const CLIENTS_COLS = ['id', 'name', 'portal_active', 'cultural_tags', 'cultural_comment', 'portal_permissions'];
 const CLIENTS_PRE_PIN = ['id', 'name', 'portal_active'];
 const POSREC_COLS = ['position_id', 'recruiter_id'];
+// Equipo HWG que ve el cliente: solo los recruiters de SUS posiciones (el servidor fuerza ese alcance).
+const USERS_PUBLIC_COLS = ['id', 'name', 'email'];
 
 // Qué datos de contacto de un candidato ve este cliente, según
 // clients.portal_permissions (misma semántica que la pantalla: cv, linkedin,
@@ -37,6 +39,7 @@ function columnasLectura(tabla, perms, preLogin) {
     case 'candidates': return columnasCandidato(perms);
     case 'clients': return preLogin ? CLIENTS_PRE_PIN : CLIENTS_COLS;
     case 'position_recruiters': return POSREC_COLS;
+    case 'users_public': return USERS_PUBLIC_COLS;
     case 'client_portal_visibility': case 'client_portal_notes': case 'client_portal_activity': case 'client_position_requests': return null;
     default: return undefined; // tabla no permitida
   }
@@ -78,7 +81,7 @@ function validarFiltros(q, permitidas) {
   return null;
 }
 
-const TABLAS_LECTURA = ['positions', 'applications', 'candidates', 'clients', 'position_recruiters', 'client_portal_visibility', 'client_portal_notes', 'client_portal_activity', 'client_position_requests'];
+const TABLAS_LECTURA = ['positions', 'applications', 'candidates', 'clients', 'position_recruiters', 'users_public', 'client_portal_visibility', 'client_portal_notes', 'client_portal_activity', 'client_position_requests'];
 
 // Escrituras que el portal hace hoy. Devuelve { body } saneado o { error }.
 //  - los campos que identifican al cliente se FUERZAN acá, no se leen del pedido

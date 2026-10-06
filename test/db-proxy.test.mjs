@@ -193,3 +193,19 @@ test('recruiter: sigue sin poder crear ni borrar clientes, y la excepción no se
   assert.equal((await call(`__t=clients&id=eq.${UUID}`, { method: 'DELETE', token: RECRUITER })).status, 403);
   assert.equal(llamadas.length, 0);
 });
+
+// ── users_public (lista del equipo) por el proxy: solo lectura, sin incrustar ──
+test('users_public: owner y recruiter la leen por el proxy; nadie la modifica; no se puede incrustar en otras tablas', async () => {
+  for (const token of [OWNER, RECRUITER]) {
+    const r = await call('__t=users_public&select=id,name,email,role', { token });
+    assert.equal(r.status, 200);
+    assert.ok(llamadas.at(-1).url.includes('/rest/v1/users_public?'));
+    assert.equal(llamadas.at(-1).headers.apikey, 'svc-fake');
+  }
+  llamadas.length = 0;
+  for (const metodo of ['POST', 'PATCH', 'DELETE']) assert.equal((await call('__t=users_public&id=eq.x', { method: metodo, body: {} })).status, 403, metodo);
+  assert.equal(llamadas.length, 0);
+  assert.equal((await call('__t=users_public', { token: CLIENTE })).status, 403);
+  assert.equal((await call('__t=users_public', { token: null })).status, 401);
+  assert.equal((await call('__t=applications&select=*,users_public(*)')).status, 400);
+});
