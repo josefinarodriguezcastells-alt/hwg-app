@@ -12,8 +12,8 @@
 -- no pasa por estas policies). Requiere hwg_ats#74 deployado (sacó upsert,
 -- que sí pide SELECT+UPDATE).
 --
--- Cerrar también el INSERT anónimo (para que nadie suba basura) queda para la
--- Fase 3: subida firmada desde el servidor.
+-- Cerrar también el INSERT anónimo (para que nadie suba basura): hecho el
+-- 2026-10-06, ver más abajo (subida firmada desde el servidor, api/upload-sign.js).
 
 DROP POLICY IF EXISTS "public access 1bourm8_0" ON storage.objects;  -- SELECT
 DROP POLICY IF EXISTS "public access 1bourm8_2" ON storage.objects;  -- UPDATE
@@ -26,3 +26,12 @@ DROP POLICY IF EXISTS "storage_delete" ON storage.objects;
 -- CREATE POLICY "storage_select" ON storage.objects FOR SELECT TO public USING (bucket_id = 'candidates');
 -- CREATE POLICY "storage_update" ON storage.objects FOR UPDATE TO public USING (bucket_id = 'candidates');
 -- CREATE POLICY "storage_delete" ON storage.objects FOR DELETE TO public USING (bucket_id = 'candidates');
+
+-- ── Paso 2 (2026-10-06): sin subidas anónimas ────────────────────────────
+-- El ATS sube con un permiso firmado por api/upload-sign.js (hwg_ats#94), que
+-- no necesita ninguna policy. Con esto anon ya no puede listar, subir, pisar
+-- ni borrar nada del bucket. Verificado: subida anónima → 403 (RLS); subida
+-- firmada → 200.
+DROP POLICY IF EXISTS "public access 1bourm8_1" ON storage.objects;  -- INSERT
+DROP POLICY IF EXISTS "storage_insert" ON storage.objects;
+-- MARCHA ATRÁS: CREATE POLICY "storage_insert" ON storage.objects FOR INSERT TO public WITH CHECK (bucket_id = 'candidates');
