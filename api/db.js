@@ -37,7 +37,7 @@ module.exports = async function handler(req, res) {
   const tabla = entrada.get('__t');
   entrada.delete('__t');
 
-  const plan = armarConsulta({ tabla, rol: session.role, metodo: req.method, entrada });
+  const plan = armarConsulta({ tabla, rol: session.role, metodo: req.method, entrada, body: req.body });
   if (plan.error) return res.status(plan.status).json({ error: plan.error });
 
   const headers = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
