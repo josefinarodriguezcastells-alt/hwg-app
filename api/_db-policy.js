@@ -27,11 +27,13 @@ const TABLAS = {
   // hace sola al cerrar la última posición o reabrir una) y la cultura
   // (CulturaInline). Nada más: ni portal, ni PIN, ni contactos, ni alta/baja.
   clients: { rw: ['owner'], recruiterSoloClientes: true, recruiterPatch: ['status', 'cultural_tags', 'cultural_comment'] },
+  // users_public: nombres, mails y rol del equipo (vista sin contraseñas). Solo lectura.
+  users_public: { rw: [] },
 };
 
 // Relaciones que se pueden incrustar en un select (las mismas tablas, más
 // `users` con columnas limitadas). Cualquier otra se rechaza.
-const INCRUSTABLES = new Set(Object.keys(TABLAS));
+const INCRUSTABLES = new Set(Object.keys(TABLAS).filter((t) => t !== 'users_public'));
 const USERS_COLUMNAS = new Set(['id', 'name', 'email', 'role']);
 
 // Devuelve null si el select es válido, o el motivo del rechazo.
