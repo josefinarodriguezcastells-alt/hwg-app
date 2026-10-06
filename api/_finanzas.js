@@ -20,11 +20,12 @@ const LOGGED_TABLES = new Set([
   'embedded_nomina',
 ]);
 
-// Si es false, el servidor acepta pedidos sin token de Finanzas (período de
-// transición mientras el frontend nuevo —que lo manda— se despliega). Se pasa
-// a true en un segundo paso, ya verificado.
+// El servidor exige el token de Finanzas (X-Finanzas-Token) en las tablas de
+// plata. Se prendió el 6/10/2026, después de verificar con Jo que el frontend
+// nuevo (hwg_ats#84) entra con el PIN. Si hiciera falta apagarlo de urgencia:
+// FINANZAS_PIN_ENFORCE=0 en las variables de Vercel, sin tocar código.
 // FINANZAS_PIN_ENFORCE=1/0 en el entorno lo fuerza (los tests lo usan).
-const ENFORCE_PIN = process.env.FINANZAS_PIN_ENFORCE !== undefined ? process.env.FINANZAS_PIN_ENFORCE === '1' : false;
+const ENFORCE_PIN = process.env.FINANZAS_PIN_ENFORCE !== undefined ? process.env.FINANZAS_PIN_ENFORCE === '1' : true;
 
 // Campos que cambian de verdad con un PATCH: { antes: {campo: valorViejo},
 // despues: {campo: valorNuevo} }. Compara como texto para que 5 y "5" no

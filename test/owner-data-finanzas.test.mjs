@@ -16,6 +16,7 @@ const jwt = require('jsonwebtoken');
 process.env.SUPABASE_URL = 'https://fake.supabase.co';
 process.env.SUPABASE_SERVICE_KEY = 'svc-fake';
 process.env.SESSION_SECRET = 'test-secret';
+process.env.FINANZAS_PIN_ENFORCE = '0'; // el PIN se prueba aparte (finanzas-facturas-pin.test.mjs, finanzas-pin.test.mjs)
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RECRUITER = '99999999-9999-4999-8999-999999999999';
