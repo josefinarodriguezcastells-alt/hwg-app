@@ -69,4 +69,24 @@ function hasFinanzasToken(req, session) {
   }
 }
 
-module.exports = { signSession, requireRole, signFinanzas, hasFinanzasToken };
+// Sesión corta del portal de clientes: se entrega cuando el PIN es correcto
+// (api/portal-verify) y la exige api/portal-db. Lleva solo el id del cliente.
+// kind:'portal' la hace inservible como sesión del ATS (requireRole la
+// rechaza: no tiene role) y una sesión del ATS no vale como sesión de portal.
+function signPortal(clientId) {
+  return jwt.sign({ kind: 'portal', cid: clientId }, process.env.SESSION_SECRET, { expiresIn: '12h' });
+}
+// Devuelve { cid } si el Authorization es una sesión de portal válida; si no, null.
+function verifyPortal(req) {
+  const h = req.headers.authorization || '';
+  const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+  if (!token || !process.env.SESSION_SECRET) return null;
+  try {
+    const p = jwt.verify(token, process.env.SESSION_SECRET);
+    return p.kind === 'portal' && typeof p.cid === 'string' && p.cid ? { cid: p.cid } : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+module.exports = { signSession, requireRole, signFinanzas, hasFinanzasToken, signPortal, verifyPortal };
