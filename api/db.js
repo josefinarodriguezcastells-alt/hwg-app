@@ -21,7 +21,7 @@ const HEADERS_VUELVEN = ['content-type', 'content-range', 'preference-applied'];
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Prefer, Range, Range-Unit, Accept, X-Finanzas-Token, X-Client-Info');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Prefer, Range, Range-Unit, Accept, Accept-Profile, Content-Profile, X-Finanzas-Token, X-Client-Info, X-Supabase-Api-Version');
   res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Preference-Applied');
   
   if (req.method === 'OPTIONS') return res.status(200).end();
