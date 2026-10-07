@@ -1,3 +1,4 @@
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 // api/portal-presentations.js
 // Endpoint público (el portal de un cliente no tiene login con JWT, se
 // identifica con su portal_token) para que el portal muestre los links de
@@ -32,11 +33,11 @@ module.exports = async function handler(req, res) {
   if (safeCandidateIds.length === 0) return res.status(200).json([]);
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+  const SUPABASE_SERVICE_KEY = claveServicio();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
   }
-  const baseHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
+  const baseHeaders = { ...cabecerasServicio() };
 
   try {
     const clientResp = await fetch(

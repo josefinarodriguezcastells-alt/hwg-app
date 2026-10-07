@@ -9,6 +9,7 @@
 // puede pedir permiso para escribir en cualquier lugar del bucket.
 
 const { requireRole } = require('./_auth');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 const BUCKET = 'candidates';
 const EXT = '[A-Za-z0-9]{1,10}';
@@ -28,7 +29,7 @@ module.exports = async function handler(req, res) {
   const session = requireRole(req, res, ['owner', 'recruiter']);
   if (!session) return;
 
-  const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+  const SUPABASE_URL = process.env.SUPABASE_URL, SUPABASE_SERVICE_KEY = claveServicio();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
 
   const path = req.body && req.body.path;
@@ -37,7 +38,7 @@ module.exports = async function handler(req, res) {
   try {
     const r = await fetch(`${SUPABASE_URL}/storage/v1/object/upload/sign/${BUCKET}/${path}`, {
       method: 'POST',
-      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
+      headers: { ...cabecerasServicio(), 'Content-Type': 'application/json' },
       body: '{}',
     });
     const json = await r.json().catch(() => null);

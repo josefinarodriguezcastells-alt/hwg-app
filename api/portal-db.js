@@ -13,6 +13,7 @@
 
 const { verifyPortal } = require('./_auth');
 const { columnasLectura, restringirSelect, validarFiltros, sanearEscritura, TABLAS_LECTURA } = require('./_portal-policy');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 const HEADERS_PASAN = ['accept', 'content-type', 'prefer', 'range', 'range-unit'];
 const HEADERS_VUELVEN = ['content-type', 'content-range', 'preference-applied'];
@@ -26,9 +27,9 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (!['GET', 'HEAD', 'POST', 'PATCH'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
 
-  const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+  const SUPABASE_URL = process.env.SUPABASE_URL, SUPABASE_SERVICE_KEY = claveServicio();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
-  const dbHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
+  const dbHeaders = { ...cabecerasServicio() };
   const leer = async (path) => {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: dbHeaders });
     if (!r.ok) throw new Error('lectura falló: ' + r.status);

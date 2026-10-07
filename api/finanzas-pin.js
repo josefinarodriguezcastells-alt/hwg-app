@@ -12,6 +12,7 @@
 
 const bcrypt = require('bcryptjs');
 const { requireRole, signFinanzas } = require('./_auth');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MINUTES = 15;
@@ -33,9 +34,9 @@ module.exports = async function handler(req, res) {
   const session = requireRole(req, res, ['owner']);
   if (!session) return;
 
-  const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+  const SUPABASE_URL = process.env.SUPABASE_URL, SUPABASE_SERVICE_KEY = claveServicio();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
-  const headers = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' };
+  const headers = { ...cabecerasServicio(), 'Content-Type': 'application/json' };
   const rpc = (fn, args) => fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { ...headers, Prefer: 'return=representation' }, body: JSON.stringify(args) });
 
   try {

@@ -14,6 +14,7 @@
 // tocar nada — mismo criterio que portal-presentations.js.
 
 const { resolvePortalWriter } = require('./_portal');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 const REJECTED_STATUS = 'rechazado';
 const SCHEDULE_STATUS = 'entrevista_cliente_fit';
@@ -124,12 +125,12 @@ module.exports = async function handler(req, res) {
   const detailText = typeof text === 'string' ? text.trim().slice(0, 2000) : '';
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+  const SUPABASE_SERVICE_KEY = claveServicio();
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
   }
-  const baseHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' };
+  const baseHeaders = { ...cabecerasServicio(), 'Content-Type': 'application/json' };
 
   try {
     // portal_pin o la sesión del owner — mismo criterio que portal-analysis

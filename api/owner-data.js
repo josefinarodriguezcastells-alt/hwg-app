@@ -24,6 +24,7 @@
 const bcrypt = require('bcryptjs');
 const { requireRole, hasFinanzasToken } = require('./_auth');
 const { FINANZAS_TABLES, LOGGED_TABLES, ENFORCE_PIN, filasLogPatch } = require('./_finanzas');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 const ALLOWED_TABLES = new Set([
   'billing',
@@ -93,7 +94,7 @@ module.exports = async function handler(req, res) {
   }
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+  const SUPABASE_SERVICE_KEY = claveServicio();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
   }
@@ -105,8 +106,7 @@ module.exports = async function handler(req, res) {
   }
 
   const baseHeaders = {
-    apikey: SUPABASE_SERVICE_KEY,
-    Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+    ...cabecerasServicio(),
     'Content-Type': 'application/json',
   };
 

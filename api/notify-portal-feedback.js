@@ -19,6 +19,7 @@
 // puede reflejar lo que de verdad quedó persistido.
 
 const { resolvePortalWriter } = require('./_portal');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -110,7 +111,7 @@ module.exports = async function handler(req, res) {
   if (!UUID_RE.test(application_id)) return res.status(400).json({ error: 'application_id inválido' });
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+  const SUPABASE_SERVICE_KEY = claveServicio();
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
@@ -121,7 +122,7 @@ module.exports = async function handler(req, res) {
     // leerse como "no se pudo guardar".
     return res.status(200).json({ ok: true, skipped: 'no RESEND_API_KEY' });
   }
-  const baseHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' };
+  const baseHeaders = { ...cabecerasServicio(), 'Content-Type': 'application/json' };
 
   // portal_pin o la sesión del owner — mismo criterio que portal-analysis
   // (hwg-app#19/#20): portal_token solo, que viaja en la URL del portal, no
