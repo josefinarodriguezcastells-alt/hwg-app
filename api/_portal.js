@@ -4,6 +4,7 @@
 // en nombres, ids ni mails que mande el portal — se resuelven acá.
 
 const { requireRole } = require('./_auth');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 const EMAIL_RE = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]+$/;
 
@@ -12,8 +13,7 @@ function escapeHtml(str) {
 }
 
 function supabaseHeaders() {
-  const key = process.env.SUPABASE_SERVICE_KEY;
-  return { apikey: key, Authorization: `Bearer ${key}` };
+  return cabecerasServicio();
 }
 
 async function sbGet(path) {

@@ -21,6 +21,7 @@
 
 const { requireRole } = require('./_auth');
 const { verifyPortalPin } = require('./_portal');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 500;
@@ -132,11 +133,11 @@ async function handler(req, res) {
   }
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+  const SUPABASE_SERVICE_KEY = claveServicio();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
   }
-  const baseHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
+  const baseHeaders = { ...cabecerasServicio() };
   const get = async (path, range) => {
     const headers = range ? { ...baseHeaders, 'Range-Unit': 'items', Range: range } : baseHeaders;
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers });
