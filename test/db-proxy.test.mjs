@@ -98,7 +98,7 @@ test('reenvía filtros, orden, límite y parámetros repetidos tal cual, con la 
   assert.equal(u.searchParams.get('limit'), '5');
   assert.equal(u.searchParams.has('__t'), false, 'el parámetro propio del proxy no sale');
   assert.equal(l.headers.apikey, 'svc-fake');
-  assert.equal(l.headers.Authorization, 'Bearer svc-fake');
+  assert.equal(l.headers.Authorization, undefined, 'una clave que no es JWT va solo en apikey');
 });
 test('reenvía Prefer, Range y Accept (single, conteos, return=representation)', async () => {
   await call('__t=applications&select=*', { headers: { Prefer: 'count=exact', Range: '0-9', 'Range-Unit': 'items', Accept: 'application/vnd.pgrst.object+json' } });

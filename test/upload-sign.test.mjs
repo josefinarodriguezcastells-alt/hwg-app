@@ -75,7 +75,7 @@ test('recruiter y owner con path válido: pide el permiso a Storage con la clave
     assert.equal(llamadas.length, 1);
     assert.equal(llamadas[0].url, `https://fake.supabase.co/storage/v1/object/upload/sign/candidates/${UUID}/cv_1759760000000.pdf`);
     assert.equal(llamadas[0].method, 'POST');
-    assert.equal(llamadas[0].headers.Authorization, 'Bearer svc-fake');
+    assert.equal(llamadas[0].headers.apikey, 'svc-fake'); assert.equal(llamadas[0].headers.Authorization, undefined);
   }
 });
 test('Storage falla o responde raro → 502, no filtra la clave', async () => {

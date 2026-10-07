@@ -17,6 +17,7 @@
 // del primer mail.
 
 const { findLatestForPair } = require('./_presentations');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 async function findByToken(supabaseUrl, headers, token) {
   const resp = await fetch(
@@ -47,11 +48,11 @@ module.exports = async function handler(req, res) {
   if (!token) return res.status(400).json({ error: 'Falta el token' });
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+  const SUPABASE_SERVICE_KEY = claveServicio();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
   }
-  const baseHeaders = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
+  const baseHeaders = { ...cabecerasServicio() };
 
   try {
     if (req.method === 'GET') {

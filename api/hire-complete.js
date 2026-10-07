@@ -14,6 +14,7 @@
 
 const { requireRole } = require('./_auth');
 const { cambios } = require('./_finanzas');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SALARIO = /^(USD|ARS) [0-9][0-9.,]{0,14}$/;
@@ -38,7 +39,7 @@ module.exports = async function handler(req, res) {
   const session = requireRole(req, res, ['owner', 'recruiter']);
   if (!session) return;
 
-  const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+  const SUPABASE_URL = process.env.SUPABASE_URL, SUPABASE_SERVICE_KEY = claveServicio();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
 
   const { application_id: appId, start_date: startDate, salario_bruto: salario } = req.body || {};
@@ -46,7 +47,7 @@ module.exports = async function handler(req, res) {
   if (startDate !== undefined && startDate !== null && startDate !== '' && !fechaValida(startDate)) return res.status(400).json({ error: 'Start date inválido' });
   if (salario !== undefined && salario !== null && salario !== '' && !SALARIO.test(String(salario))) return res.status(400).json({ error: 'Salario inválido' });
 
-  const h = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
+  const h = { ...cabecerasServicio() };
   const leer = async (path) => {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: h });
     if (!r.ok) throw new Error('lectura falló: ' + r.status);

@@ -11,6 +11,7 @@
 
 const { verifyPortalPin } = require('./_portal');
 const { signPortal } = require('./_auth');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,7 +20,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+  if (!process.env.SUPABASE_URL || !claveServicio()) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
   }
 
@@ -30,7 +31,7 @@ module.exports = async function handler(req, res) {
 
     const resp = await fetch(
       `${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${encodeURIComponent(result.client.id)}&select=id,name,cultural_tags,cultural_comment,portal_permissions`,
-      { headers: { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` } }
+      { headers: cabecerasServicio() }
     );
     const rows = await resp.json();
     if (!resp.ok || !rows[0]) return res.status(500).json({ error: 'No se pudo cargar el portal' });

@@ -1,10 +1,11 @@
 const crypto = require('crypto');
 const { requireRole } = require('./_auth');
 const { findLatestForPair } = require('./_presentations');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 module.exports = async function handler(req, res) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+  const SUPABASE_KEY = claveServicio() || process.env.SUPABASE_ANON_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
@@ -41,12 +42,10 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'candidate_id y position_id son requeridos para publicar un informe' });
     }
 
-    const headers = {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Prefer': 'return=representation',
-    };
+    // La clave de servicio va según su formato; sin ella (solo en desarrollo) cae a la pública.
+    const headers = claveServicio()
+      ? cabecerasServicio({ 'Content-Type': 'application/json', 'Prefer': 'return=representation' })
+      : { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=representation' };
     const appUrl = process.env.APP_URL || 'https://hwg-app.vercel.app';
 
     // Un informe por candidato+posición: si ya hay uno, se actualiza en el

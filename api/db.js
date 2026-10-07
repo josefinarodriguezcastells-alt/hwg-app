@@ -14,6 +14,7 @@
 
 const { requireRole } = require('./_auth');
 const { armarConsulta } = require('./_db-policy');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 const HEADERS_PASAN = ['accept', 'content-type', 'prefer', 'range', 'range-unit'];
 const HEADERS_VUELVEN = ['content-type', 'content-range', 'preference-applied'];
@@ -30,7 +31,7 @@ module.exports = async function handler(req, res) {
   const session = requireRole(req, res, ['owner', 'recruiter']);
   if (!session) return;
 
-  const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+  const SUPABASE_URL = process.env.SUPABASE_URL, SUPABASE_SERVICE_KEY = claveServicio();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
 
   const entrada = new URLSearchParams(new URL(req.url, 'http://x').search);
@@ -40,7 +41,7 @@ module.exports = async function handler(req, res) {
   const plan = armarConsulta({ tabla, rol: session.role, metodo: req.method, entrada, body: req.body });
   if (plan.error) return res.status(plan.status).json({ error: plan.error });
 
-  const headers = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
+  const headers = { ...cabecerasServicio() };
   for (const h of HEADERS_PASAN) if (req.headers[h]) headers[h] = req.headers[h];
 
   let body;

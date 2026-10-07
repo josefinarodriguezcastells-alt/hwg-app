@@ -6,6 +6,7 @@
 
 const bcrypt = require('bcryptjs');
 const { signSession } = require('./_auth');
+const { claveServicio, cabecerasServicio } = require('./_supabase');
 
 // Auditoría de los 20 endpoints: no había ningún límite de intentos —
 // alguien podía probar contraseñas para un email sin ningún freno.
@@ -44,14 +45,13 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+  const SUPABASE_SERVICE_KEY = claveServicio();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return res.status(500).json({ error: 'Variables de entorno de Supabase no configuradas' });
   }
 
   const dbHeaders = {
-    apikey: SUPABASE_SERVICE_KEY,
-    Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+    ...cabecerasServicio(),
     'Content-Type': 'application/json',
   };
   const rpc = (fn, args) => fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
