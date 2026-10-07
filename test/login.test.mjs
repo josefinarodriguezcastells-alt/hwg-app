@@ -21,10 +21,12 @@ process.env.SESSION_SECRET = 'test-secret';
 const REAL_HASH = bcrypt.hashSync('correcta123', 4);
 const USERS = [
   { id: 'u1', email: 'recruiter@hwgtalent.com', name: 'Rec Uno', role: 'recruiter', password: REAL_HASH },
-  // Email real con mayúsculas de mitad de palabra — el lookup de `users`
-  // tiene que seguir siendo case-sensitive como antes (no normalizar acá),
-  // o esta cuenta se queda sin poder loguearse nunca más.
+  // Email real con mayúsculas de mitad de palabra: tiene que poder entrar
+  // escrito igual que está guardado y también en minúsculas.
+  // Segunda cuenta con guion bajo: `_` es comodín de ilike y no debe colarse.
   { id: 'u2', email: 'Majulcarlaa@gmail.com', name: 'Carla Majul', role: 'recruiter', password: REAL_HASH },
+  { id: 'u3', email: 'ana_b@hwgtalent.com', name: 'Ana', role: 'recruiter', password: REAL_HASH },
+  { id: 'u4', email: 'anaxb@hwgtalent.com', name: 'Otra Ana', role: 'recruiter', password: bcrypt.hashSync('otra-clave', 4) },
 ];
 
 // login_attempts en memoria, {email}|{ip} -> [timestamps]. record() imita la
@@ -63,7 +65,13 @@ globalThis.fetch = async (url, opts = {}) => {
     return json([], 200);
   }
   if (path.startsWith('users')) {
-    const wanted = new URL(url).searchParams.get('email').replace(/^eq\./, '');
+    const param = new URL(url).searchParams.get('email');
+    if (param.startsWith('ilike.')) {
+      // Como ilike de Postgres: sin distinguir mayúsculas, `_` y `%` son comodines.
+      const re = new RegExp('^' + param.slice(6).replace(/[.+^$()|[\]\\{}]/g, '\\$&').replace(/[%*]/g, '.*').replace(/_/g, '.') + '$', 'i');
+      return json(USERS.filter(u => re.test(u.email)));
+    }
+    const wanted = param.replace(/^eq\./, '');
     return json(USERS.filter(u => u.email === wanted));
   }
   throw new Error('ruta no mockeada: ' + path);
@@ -135,10 +143,39 @@ test('el límite es por email — otro usuario no se ve afectado', async () => {
   assert.equal(r.status, 200, JSON.stringify(r.body));
 });
 
-test('el email de mayúsculas de mitad de palabra sigue pudiendo loguearse (no se normaliza el lookup a users)', async () => {
+test('el email de mayúsculas de mitad de palabra entra escrito igual que está guardado', async () => {
   const r = await post({ email: 'Majulcarlaa@gmail.com', password: 'correcta123' });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(r.body.email, 'Majulcarlaa@gmail.com');
+});
+
+test('el login no distingue mayúsculas ni espacios en el email (el caso de Carla)', async () => {
+  for (const e of ['majulcarlaa@gmail.com', 'MAJULCARLAA@GMAIL.COM', '  Majulcarlaa@Gmail.com ']) {
+    const r = await post({ email: e, password: 'correcta123' });
+    assert.equal(r.status, 200, e + ' ' + JSON.stringify(r.body));
+    assert.equal(r.body.email, 'Majulcarlaa@gmail.com');
+  }
+});
+
+test('mayúsculas distintas con contraseña mala siguen dando 401', async () => {
+  const r = await post({ email: 'MAJULCARLAA@gmail.com', password: 'mala' });
+  assert.equal(r.status, 401);
+});
+
+test('el guion bajo del email no funciona como comodín: no entra a la cuenta equivocada', async () => {
+  const bien = await post({ email: 'ana_b@hwgtalent.com', password: 'correcta123' });
+  assert.equal(bien.status, 200);
+  assert.equal(bien.body.id, 'u3');
+  // 'anaxb' existe con otra clave: pedir ana_b con la clave de anaxb no sirve.
+  const cruzado = await post({ email: 'ana_b@hwgtalent.com', password: 'otra-clave' });
+  assert.equal(cruzado.status, 401);
+  const otra = await post({ email: 'anaxb@hwgtalent.com', password: 'otra-clave' });
+  assert.equal(otra.body.id, 'u4');
+});
+
+test('un % en el email no sirve para recorrer cuentas', async () => {
+  const r = await post({ email: '%@hwgtalent.com', password: 'correcta123' });
+  assert.equal(r.status, 401);
 });
 
 test('el conteo de intentos no distingue mayúsculas en el email (para que no se esquive el límite)', async () => {
