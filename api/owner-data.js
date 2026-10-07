@@ -43,6 +43,7 @@ const ALLOWED_TABLES = new Set([
   'tipo_cambio', // tipo de cambio oficial por mes — owner
   'client_finanzas', // plazo de pago por cliente — owner
   'lead_contacts', // Fase 2: contacto comercial de un lead — solo owner
+  'finanzas_resultados', // hoja Detalle de Silvana (costo, neto, reparto) — owner con PIN de Finanzas
 ]);
 
 // Campos de facturas que solo pueden cambiar las funciones de facturación

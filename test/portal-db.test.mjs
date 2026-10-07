@@ -23,10 +23,11 @@ const B = '22222222-2222-4222-8222-222222222222';
 const SES_A = signPortal(A), SES_B = signPortal(B);
 const OWNER = jwt.sign({ id: 'u1', email: 'o@x', role: 'owner' }, 'test-secret');
 
-let llamadas, perms, activo, posiciones, apps;
+let llamadas, perms, activo, posiciones, apps, equipo;
 beforeEach(() => {
   llamadas = []; perms = { cv: true, email: false, phone: false, linkedin: false }; activo = true;
   posiciones = { [A]: ['p1', 'p2'], [B]: ['p9'] };
+  equipo = { p1: ['r1'], p2: ['r1', 'r2'], p9: ['r9'] };
   apps = [{ id: 'a1', position_id: 'p1', candidate_id: 'k1' }, { id: 'a2', position_id: 'p2', candidate_id: 'k2' }, { id: 'a9', position_id: 'p9', candidate_id: 'k9' }];
 });
 const json = (o, status = 200, headers = {}) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', ...headers } });
@@ -40,6 +41,7 @@ globalThis.fetch = async (url, opts = {}) => {
   const val = (k) => (sp.get(k) || '').replace(/^(eq|in)\./, '').replace(/[()]/g, '');
   if (tabla === 'clients' && sp.get('select') === 'id,portal_permissions') return json(activo && val('id') ? [{ id: val('id'), portal_permissions: perms }] : []);
   if (tabla === 'positions' && sp.get('select') === 'id') return json((posiciones[val('client_id')] || []).map((id) => ({ id })));
+  if (tabla === 'position_recruiters' && sp.get('select') === 'recruiter_id') { const ps = val('position_id').split(','); return json(ps.flatMap((p) => (equipo[p] || []).map((r) => ({ recruiter_id: r })))); }
   if (tabla === 'applications' && sp.get('select') === 'candidate_id') { const ps = val('position_id').split(','); return json(apps.filter((a) => ps.includes(a.position_id)).map((a) => ({ candidate_id: a.candidate_id }))); }
   if (tabla === 'applications' && sp.get('select') === 'id' && sp.get('id')) { const ids = val('id').split(','), ps = val('position_id').split(','); return json(apps.filter((a) => ids.includes(a.id) && ps.includes(a.position_id)).map((a) => ({ id: a.id }))); }
   if (tabla === 'applications' && sp.get('select') === 'candidate_id' ) return json([]);
@@ -75,7 +77,7 @@ const call = (qs, { method = 'GET', ses = SES_A, body, headers = {} } = {}) => r
   method, body: body !== undefined ? JSON.stringify(body) : undefined,
   headers: { 'Content-Type': 'application/json', ...(ses ? { Authorization: 'Bearer ' + ses } : {}), ...headers },
 });
-const finales = () => llamadas.filter((l) => !(l.sp.get('select') === 'id,portal_permissions' || (l.tabla === 'positions' && l.sp.get('select') === 'id') || (l.tabla === 'applications' && (l.sp.get('select') === 'candidate_id' || (l.sp.get('select') === 'id' && l.sp.has('id') && l.sp.has('position_id') && !l.body && l.sp.get('id').startsWith('in.'))))));
+const finales = () => llamadas.filter((l) => !((l.tabla === 'position_recruiters' && l.sp.get('select') === 'recruiter_id') || l.sp.get('select') === 'id,portal_permissions' || (l.tabla === 'positions' && l.sp.get('select') === 'id') || (l.tabla === 'applications' && (l.sp.get('select') === 'candidate_id' || (l.sp.get('select') === 'id' && l.sp.has('id') && l.sp.has('position_id') && !l.body && l.sp.get('id').startsWith('in.'))))));
 const ultima = () => finales().pop();
 
 // ── sesión ────────────────────────────────────────────────────────────────
@@ -246,4 +248,27 @@ test('el preflight CORS permite las cabeceras de supabase-js y X-Portal-Token', 
   const r = await realFetch(`${srv.url}/?__t=positions`, { method: 'OPTIONS' });
   const ok = (r.headers.get('access-control-allow-headers') || '').toLowerCase();
   for (const h of ['authorization', 'prefer', 'range', 'accept', 'accept-profile', 'content-profile', 'x-client-info', 'x-portal-token', 'content-type']) assert.ok(ok.includes(h), h);
+});
+
+test('users_public: el cliente solo ve a los recruiters de SUS posiciones (id, nombre, mail); el cliente B no ve los de A', async () => {
+  const r = await call('__t=users_public&select=id,name,email&id=in.(r1,r2,r9,r77)');
+  assert.equal(r.status, 200);
+  const f = ultima();
+  assert.equal(f.tabla, 'users_public');
+  assert.equal(f.sp.get('select'), 'id,name,email');
+  assert.deepEqual(f.sp.getAll('id'), ['in.(r1,r2,r9,r77)', 'in.(r1,r2)'], 'el filtro del navegador se combina con el alcance forzado (AND)');
+  llamadas.length = 0;
+  await call('__t=users_public&select=id,name,email', { ses: SES_B });
+  assert.deepEqual(ultima().sp.getAll('id'), ['in.(r9)']);
+});
+test('users_public: sin recruiters → no ve a nadie; no se pide el rol ni se incrusta ni se escribe', async () => {
+  equipo = {};
+  await call('__t=users_public&select=id,name');
+  assert.deepEqual(ultima().sp.getAll('id'), ['in.(00000000-0000-0000-0000-000000000000)']);
+  assert.equal((await call('__t=users_public&select=id,role')).status, 200);
+  assert.equal(ultima().sp.get('select'), 'id', 'la columna rol se descarta');
+  assert.equal((await call('__t=users_public&select=role')).status, 400);
+  assert.equal((await call('__t=users_public&select=id,name,applications(*)')).status, 400);
+  assert.equal((await call('__t=users_public', { method: 'POST', body: { name: 'x' } })).status, 403);
+  assert.equal((await call('__t=users_public&id=eq.r1', { method: 'PATCH', body: { name: 'x' } })).status, 403);
 });
