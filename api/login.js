@@ -65,12 +65,11 @@ module.exports = async function handler(req, res) {
     if (!email || !password) {
       return res.status(400).json({ error: 'Email y contraseña requeridos' });
     }
-    // emailNorm es solo para CONTAR intentos (sin distinguir mayúsculas, así
-    // no se esquiva el límite escribiéndolo distinto cada vez) — la consulta
-    // a `users` de abajo sigue usando `email` tal cual lo mandaron, como
-    // hacía antes. Hay emails reales guardados con mayúsculas de mitad de
-    // palabra (ej. "Majulcarlaa@gmail.com"), y `eq.` en PostgREST distingue
-    // mayúsculas: normalizarlo ahí rompería el login de esas cuentas.
+    // emailNorm sirve para contar intentos y para buscar al usuario, sin
+    // distinguir mayúsculas: a Carla le fallaba el login por escribir su email
+    // distinto de como está guardado ("Majulcarlaa@gmail.com"). Hay emails
+    // guardados con mayúsculas de mitad de palabra, así que la búsqueda es
+    // ilike (no `eq.`, que sí las distingue) y abajo se elige la fila exacta.
     const emailNorm = String(email).trim().toLowerCase();
     const ip = clientIp(req);
 
@@ -90,7 +89,7 @@ module.exports = async function handler(req, res) {
     }
 
     const resp = await fetch(
-      `${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(email)}&select=*`,
+      `${SUPABASE_URL}/rest/v1/users?email=ilike.${encodeURIComponent(emailNorm)}&select=*&limit=10`,
       { headers: dbHeaders }
     );
     if (!resp.ok) {
@@ -99,7 +98,11 @@ module.exports = async function handler(req, res) {
     }
 
     const rows = await resp.json();
-    const user = rows[0];
+    // ilike trata `_` y `%` como comodines: se descartan las filas que no son
+    // el mismo email. Si hubiera dos que difieren solo en mayúsculas, gana la
+    // escrita igual que la mandaron.
+    const user = rows.find(r => r.email === email)
+      || rows.find(r => String(r.email).toLowerCase() === emailNorm);
 
     // Mismo mensaje de error si el usuario no existe o si la contraseña no
     // matchea, para no revelar qué emails están registrados. El intento ya
