@@ -1,3 +1,6 @@
+// Configuración pública para las páginas sueltas (index.html, perfil.html).
+// Ya no devuelve ninguna clave de Supabase: esas páginas no hablan con la base
+// (usan /api/presentation, /api/generate, etc.) y la clave anon legacy está apagada.
 module.exports = function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -5,7 +8,6 @@ module.exports = function handler(req, res) {
 
   res.status(200).json({
     supabaseUrl:  process.env.SUPABASE_URL,
-    supabaseKey:  process.env.SUPABASE_ANON_KEY,
     appUrl:       process.env.APP_URL || 'https://hwg-app.vercel.app',
   });
 };
