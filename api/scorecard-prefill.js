@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     // El armado del pedido (qué se le manda a la IA y con qué topes) está en
     // _scorecardPrompt.js, donde se puede probar sin llamar a la IA.
     const { system: systemPrompt, userText, recortado } = construirPrompt({
-      candidateName, positionRole, positionClient, preguntas, transcripcion, jdEstructurada,
+      candidateName, positionRole, positionClient, preguntas, transcripcion, jdEstructurada, tieneCV: !!(cvBase64 && cvMediaType),
     });
 
     const userContent = [{ type: 'text', text: userText }];

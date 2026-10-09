@@ -47,7 +47,7 @@ function resumirCriterios(jdEstructurada) {
   return { criterios, calibraciones };
 }
 
-function construirPrompt({ candidateName, positionRole, positionClient, preguntas, transcripcion, jdEstructurada }) {
+function construirPrompt({ candidateName, positionRole, positionClient, preguntas, transcripcion, jdEstructurada, tieneCV = true }) {
   const lista = (preguntas || []).map((p, i) =>
     `${i + 1}. [${p.id}] ${p.label} (tipo: ${p.tipo}${p.opciones ? ', opciones: ' + p.opciones.join('/') : ''})`
   ).join('\n');
@@ -74,7 +74,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
     "[id_pregunta]": "valor pre-completado según el tipo de pregunta"
   },
   "no_se_hablo": ["ids de las preguntas del scorecard que NO se pudieron responder con la información disponible"],
-  "notas_cv": "string — resumen de 2-3 líneas de los puntos del CV más relevantes para ESTA posición"
+  "notas_cv": "string — resumen de 2-3 líneas de los puntos del CV más relevantes para ESTA posición. ${tieneCV ? '' : 'NO HAY CV adjunto: devolvé \"\" y no menciones que falta el CV.'}"
 }
 
 Para las respuestas:
@@ -107,6 +107,8 @@ No incluyas explicaciones, solo el JSON.`;
 // scorecard sabe usar: respuestas de preguntas que existen, con valores válidos.
 // A veces la IA escribe "No se abordó en detalle..." como respuesta en vez de
 // dejarla vacía. Eso no es una respuesta: cuenta como "no se habló".
+// El resumen del CV viaja al informe: una frase sobre un CV que no existe no debe llegar ahí.
+const SIN_CV = /^\s*(no hay (un )?cv|sin cv|no (se )?(adjunt|cuenta con|dispone|proporcion)|el cv no)/i;
 const RELLENO = /^\s*(no se (abord|habl|detall|mencion|dijo|profundiz|especific|brind|indic|sabe)|no (hay|consta|figura|surge|se registra)\b|sin (detalles?|informaci[oó]n|datos|evidencia|mencion)|no (fue|fueron) (abordad|mencionad|detallad))/i;
 
 function limpiarPrefill(parsed, preguntas) {
@@ -133,7 +135,7 @@ function limpiarPrefill(parsed, preguntas) {
     fit_cultural_pills: (Array.isArray(p.fit_cultural_pills) ? p.fit_cultural_pills : []).filter(x => PILLS.includes(x)),
     respuestas,
     no_se_hablo: [...new Set(noSeHablo)],
-    notas_cv: str(p.notas_cv),
+    notas_cv: SIN_CV.test(str(p.notas_cv)) || RELLENO.test(str(p.notas_cv)) ? '' : str(p.notas_cv),
   };
 }
 
