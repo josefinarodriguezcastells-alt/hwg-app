@@ -13,7 +13,7 @@ const I = require('./_informeV2');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MODELOS = { haiku: 'claude-haiku-4-5-20251001', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
-const MAX_TOKENS_RESPUESTA = 5000;
+const MAX_TOKENS_RESPUESTA = 8000;
 
 const ETIQUETAS = {
   startup: 'Startup', scaleup: 'Scale-up', corpo: 'Corporación', agencia: 'Agencia', consultora: 'Consultora',
