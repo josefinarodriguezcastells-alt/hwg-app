@@ -30,6 +30,8 @@ globalThis.fetch = async (url, opts = {}) => {
   throw new Error('fetch no mockeado: ' + url);
 };
 
+// Las preguntas del template empiezan con q_; los datos fijos (sueldo, motivo...) se prueban aparte.
+const esPregunta = (id) => id.startsWith('q_');
 const PREGUNTAS = [
   { id: 'q_ingles', label: 'Nivel de inglés', tipo: 'escala' },
   { id: 'q_remoto', label: '¿Acepta remoto?', tipo: 'si_no' },
@@ -92,7 +94,7 @@ test('limpiarPrefill: descarta preguntas inexistentes y valores inválidos, y an
   }, PREGUNTAS);
   assert.equal(r.nombre_apellido, 'Ana Pérez');
   assert.deepEqual(r.respuestas, { q_motivo: 'Busca crecer' });
-  assert.deepEqual(r.no_se_hablo, ['q_remoto']);
+  assert.deepEqual(r.no_se_hablo.filter(esPregunta), ['q_remoto']);
   assert.deepEqual(r.fit_cultural_pills, ['startup']);
 });
 
@@ -102,7 +104,7 @@ test('limpiarPrefill: "No se abordó en detalle" no es una respuesta, es un "no 
     q_ingles: '4',
   } }, [...PREGUNTAS, { id: 'q_otro', label: 'Otro', tipo: 'texto' }, { id: 'q_x', label: 'X', tipo: 'texto' }]);
   assert.deepEqual(r.respuestas, { q_ingles: '4' });
-  assert.deepEqual(r.no_se_hablo, ['q_motivo']);
+  assert.deepEqual(r.no_se_hablo.filter(esPregunta), ['q_motivo']);
   for (const frase of ['Sin información sobre esto', 'No hay información', 'No se mencionó', 'No se detalló el impacto']) {
     assert.equal(Object.keys(limpiarPrefill({ respuestas: { q_x: frase } }, [{ id: 'q_x', tipo: 'texto' }]).respuestas).length, 0, frase);
   }
@@ -121,9 +123,35 @@ test('sin CV: el pedido lo avisa y un "No hay CV adjunto" no llega al scorecard 
   assert.equal(limpiarPrefill({ notas_cv: '5 años en compras industriales' }, PREGUNTAS).notas_cv, '5 años en compras industriales');
 });
 
+test('datos fijos nuevos: sueldo en partes, motivo, vacaciones y otros procesos', () => {
+  const r = limpiarPrefill({
+    sueldo: { monto: 'USD 3.500', moneda: 'usd', periodo: 'Mensual' },
+    motivo_cambio: 'No se abordó en detalle', vacaciones: 'Febrero, 2 semanas', otros_procesos: 'No',
+  }, []);
+  assert.deepEqual(r.sueldo, { monto: '3500', moneda: 'USD', periodo: 'mensual' });
+  assert.equal(r.motivo_cambio, '', 'relleno descartado');
+  assert.equal(r.vacaciones, 'Febrero, 2 semanas');
+  assert.equal(r.otros_procesos, 'no');
+  assert.deepEqual(r.no_se_hablo, ['motivo_cambio']);
+});
+
+test('sueldo: sin monto o con basura no inventa nada, y moneda/periodo dudosos quedan vacíos', () => {
+  assert.equal(limpiarPrefill({ sueldo: { monto: null, moneda: 'USD' } }, []).sueldo, null);
+  assert.equal(limpiarPrefill({ sueldo: { monto: 'a convenir' } }, []).sueldo, null);
+  assert.equal(limpiarPrefill({ sueldo: 'mucho' }, []).sueldo, null);
+  assert.deepEqual(limpiarPrefill({ sueldo: { monto: 4000, moneda: 'euros', periodo: 'anual' } }, []).sueldo, { monto: '4000', moneda: '', periodo: '' });
+  assert.deepEqual(limpiarPrefill({ sueldo: null }, []).no_se_hablo, ['sueldo', 'motivo_cambio', 'vacaciones', 'otros_procesos']);
+  assert.equal(limpiarPrefill({ otros_procesos: 'quizás' }, []).otros_procesos, '');
+});
+
+test('el pedido describe los datos fijos nuevos', () => {
+  const { system } = construirPrompt({ transcripcion: 'x', preguntas: PREGUNTAS });
+  for (const k of ['"sueldo"', '"motivo_cambio"', '"vacaciones"', '"otros_procesos"']) assert.ok(system.includes(k), k);
+});
+
 test('limpiarPrefill: aguanta basura sin romperse', () => {
   assert.deepEqual(limpiarPrefill(null, PREGUNTAS).respuestas, {});
-  assert.deepEqual(limpiarPrefill({ respuestas: 'hola', no_se_hablo: 5 }, PREGUNTAS).no_se_hablo, []);
+  assert.deepEqual(limpiarPrefill({ respuestas: 'hola', no_se_hablo: 5 }, PREGUNTAS).no_se_hablo.filter(esPregunta), []);
 });
 
 // ── endpoint completo, con la IA simulada ──
@@ -166,7 +194,7 @@ test('endpoint: una sola llamada a la IA, con tope de respuesta y resultado limp
   assert.ok(aiBodies[0].messages[0].content[0].text.includes('Java'));
   assert.equal(j.ok, true);
   assert.deepEqual(j.prefill.respuestas, { q_ingles: '4' });
-  assert.deepEqual(j.prefill.no_se_hablo, ['q_remoto']);
+  assert.deepEqual(j.prefill.no_se_hablo.filter(esPregunta), ['q_remoto']);
 });
 
 test('endpoint: respuesta cortada o ilegible de la IA da un error claro, no un cuelgue', async () => {
