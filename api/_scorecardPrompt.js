@@ -121,7 +121,7 @@ const RELLENO = /^\s*(no se (abord|habl|detall|mencion|dijo|profundiz|especific|
 // Si la IA no devolvió el sueldo en partes pero sí como texto ("3.200 USD mensuales",
 // "$4,1M brutos", "15.000 - 16.000 USD"), se convierte acá con reglas fijas, sin IA.
 // Si hay un rango se toma el monto más alto. Lo dudoso (moneda, período) queda vacío.
-function parsearSueldoTexto(texto) {
+function montosDeTexto(texto) {
   const t = String(texto || '').toLowerCase();
   const montos = [];
   for (const m of t.matchAll(/(\d[\d.,]*)\s*(millones?|mill\b|mm?\b|mil\b|k\b)?/g)) {
@@ -135,6 +135,12 @@ function parsearSueldoTexto(texto) {
     else n = Number(crudo);
     if (Number.isFinite(n) && n > 0) montos.push(Math.round(n));
   }
+  return montos;
+}
+
+function parsearSueldoTexto(texto) {
+  const t = String(texto || '').toLowerCase();
+  const montos = montosDeTexto(t);
   if (!montos.length) return null;
   const usd = /usd|u\$s|us\$|d[oó]lar/.test(t);
   const ars = !usd && (/\$|ars|peso/.test(t));
@@ -191,4 +197,4 @@ function limpiarPrefill(parsed, preguntas) {
   };
 }
 
-module.exports = { parsearSueldoTexto, MAX_NOTAS, MAX_TOKENS_RESPUESTA, PILLS, recortarNotas, resumirCriterios, construirPrompt, limpiarPrefill };
+module.exports = { montosDeTexto, parsearSueldoTexto, MAX_NOTAS, MAX_TOKENS_RESPUESTA, PILLS, recortarNotas, resumirCriterios, construirPrompt, limpiarPrefill };
