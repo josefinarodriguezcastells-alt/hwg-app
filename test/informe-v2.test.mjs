@@ -248,6 +248,7 @@ test('encabezado: si el scorecard es viejo, motivo, vacaciones y otros procesos 
 
 test('sueldo viejo en texto: se lee solo para comparar con la banda, sin cambiar lo que se muestra', () => {
   assert.deepEqual(M.sueldoDeTextoViejo('USD 6.000 mensual'), { monto: '6000', moneda: 'USD', periodo: 'mensual' });
+  assert.equal(M.sueldoDeTextoViejo('USD 6.000').periodo, '', 'sin período explícito no se inventa');
   assert.deepEqual(M.sueldoDeTextoViejo('Actualmente USD 10.000 mensual salario adicional 13 y 14 el 15 es bono'), { monto: '10000', moneda: 'USD', periodo: 'mensual' });
   assert.equal(M.sueldoDeTextoViejo('4.5 netos'), null, 'sin moneda clara y número chico: no se compara');
   assert.equal(M.sueldoDeTextoViejo('a negociar'), null);
@@ -297,4 +298,22 @@ test('datos sensibles: el pedido los prohíbe y el chequeo los detecta', () => {
   assert.equal(limpio.qa.find(q => q.clave === 'sin_datos_sensibles').ok, true);
   for (const f of ['tratamiento médico', 'su embarazo', 'una enfermedad', 'divorcio']) assert.ok(M.SENSIBLES.test(f), f);
   assert.ok(!M.SENSIBLES.test('Lideró un equipo de salud digital'.replace('salud', 'ventas')));
+});
+
+test('el sueldo se muestra una sola vez y siempre igual; las aclaraciones quedan como nota de la recruiter', () => {
+  const sc = { ...SCORECARD, obligatorio: { salario: 'Actualmente USD 10.000 mensual salario adicional 13 y 14 el 15 es bono por cumplimiento de objetivos' } };
+  const h = M.armarEncabezado(entrada({ scorecard: sc }));
+  assert.equal(h.sueldo.texto, 'USD 10.000 mensual');
+  assert.match(h.sueldo.nota, /bono por cumplimiento/);
+  const igual = M.armarEncabezado(entrada());
+  assert.equal(igual.sueldo.texto, 'USD 6.000 mensual'); assert.equal(igual.sueldo.nota, '');
+  const raro = M.armarEncabezado(entrada({ scorecard: { ...SCORECARD, obligatorio: { salario: 'a negociar' } } }));
+  assert.equal(raro.sueldo.texto, 'a negociar', 'si no se puede leer, se muestra tal cual');
+  assert.equal(M.textoSueldo({ monto: '2000000', moneda: 'ARS', periodo: 'mensual' }), '$ 2.000.000 mensual');
+});
+
+test('el informe nunca lleva costos ni precios: solo el sueldo pretendido', () => {
+  const inf = M.ensamblarInforme({ entrada: entrada(), ia: IA_OK, fuentes: FUENTES });
+  const json = JSON.stringify(inf);
+  assert.ok(!/costo|cost_|precio|usd_aprox|tokens/i.test(json), 'ningún campo de costo dentro del informe');
 });
