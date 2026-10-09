@@ -111,6 +111,16 @@ test('limpiarPrefill: "No se abordó en detalle" no es una respuesta, es un "no 
   assert.equal(limpiarPrefill({ respuestas: { q_x: 'Nota: no tiene otros procesos' } }, [{ id: 'q_x', tipo: 'texto' }]).respuestas.q_x, 'Nota: no tiene otros procesos');
 });
 
+test('sin CV: el pedido lo avisa y un "No hay CV adjunto" no llega al scorecard (ni al informe)', () => {
+  const { system } = construirPrompt({ transcripcion: 'x', preguntas: PREGUNTAS, tieneCV: false });
+  assert.match(system, /NO HAY CV adjunto/);
+  assert.ok(!construirPrompt({ transcripcion: 'x', preguntas: PREGUNTAS, tieneCV: true }).system.includes('NO HAY CV adjunto'));
+  for (const f of ['No hay CV adjunto disponible para analizar.', 'Sin CV: solo notas', 'El CV no fue adjuntado', 'No se adjuntó CV']) {
+    assert.equal(limpiarPrefill({ notas_cv: f }, PREGUNTAS).notas_cv, '', f);
+  }
+  assert.equal(limpiarPrefill({ notas_cv: '5 años en compras industriales' }, PREGUNTAS).notas_cv, '5 años en compras industriales');
+});
+
 test('limpiarPrefill: aguanta basura sin romperse', () => {
   assert.deepEqual(limpiarPrefill(null, PREGUNTAS).respuestas, {});
   assert.deepEqual(limpiarPrefill({ respuestas: 'hola', no_se_hablo: 5 }, PREGUNTAS).no_se_hablo, []);
