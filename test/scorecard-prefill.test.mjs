@@ -10,7 +10,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const jwt = require('jsonwebtoken');
 const {
-  MAX_NOTAS, recortarNotas, resumirCriterios, construirPrompt, limpiarPrefill,
+  MAX_NOTAS, parsearSueldoTexto, recortarNotas, resumirCriterios, construirPrompt, limpiarPrefill,
 } = require('../api/_scorecardPrompt.js');
 
 process.env.SESSION_SECRET = 'test-secret';
@@ -147,6 +147,36 @@ test('sueldo: sin monto o con basura no inventa nada, y moneda/periodo dudosos q
 test('el pedido describe los datos fijos nuevos', () => {
   const { system } = construirPrompt({ transcripcion: 'x', preguntas: PREGUNTAS });
   for (const k of ['"sueldo"', '"motivo_cambio"', '"vacaciones"', '"otros_procesos"']) assert.ok(system.includes(k), k);
+});
+
+test('sueldo en texto → partes, con los formatos reales de los scorecards actuales', () => {
+  const casos = [
+    ['$2.000.000 brutos mensuales', { monto: '2000000', moneda: 'ARS', periodo: 'mensual' }],
+    ['$2.200.000 brutos', { monto: '2200000', moneda: 'ARS', periodo: '' }],
+    ['$4,1M brutos', { monto: '4100000', moneda: 'ARS', periodo: '' }],
+    ['$4.000.000 – $4.100.000 brutos', { monto: '4100000', moneda: 'ARS', periodo: '' }],
+    ['$6millones bruto conversable', { monto: '6000000', moneda: 'ARS', periodo: '' }],
+    ['15.000 - 16.000 USD mensuales', { monto: '16000', moneda: 'USD', periodo: 'mensual' }],
+    ['3.200 USD mensuales', { monto: '3200', moneda: 'USD', periodo: 'mensual' }],
+    ['USD 25 por hora', { monto: '25', moneda: 'USD', periodo: 'hora' }],
+    ['3500 dólares', { monto: '3500', moneda: 'USD', periodo: '' }],
+    ['4k USD', { monto: '4000', moneda: 'USD', periodo: '' }],
+  ];
+  for (const [txt, esperado] of casos) assert.deepEqual(parsearSueldoTexto(txt), esperado, txt);
+  for (const txt of ['-', 'a negociar', '', null, 'conversable']) assert.equal(parsearSueldoTexto(txt), null, String(txt));
+});
+
+test('si la IA no manda el sueldo en partes pero sí el texto, se arma igual', () => {
+  const r = limpiarPrefill({ pretension_salarial: '3.200 USD mensuales', sueldo: null }, []);
+  assert.deepEqual(r.sueldo, { monto: '3200', moneda: 'USD', periodo: 'mensual' });
+  assert.ok(!r.no_se_hablo.includes('sueldo'));
+});
+
+test('una respuesta real que empieza con "No hay posibilidad..." no es relleno', () => {
+  const r = limpiarPrefill({ motivo_cambio: 'No hay posibilidad de crecer a supervisión en su empresa actual' }, []);
+  assert.equal(r.motivo_cambio, 'No hay posibilidad de crecer a supervisión en su empresa actual');
+  assert.equal(limpiarPrefill({ motivo_cambio: 'No hay información sobre el motivo' }, []).motivo_cambio, '');
+  assert.equal(limpiarPrefill({ motivo_cambio: 'No hay datos' }, []).motivo_cambio, '');
 });
 
 test('limpiarPrefill: aguanta basura sin romperse', () => {

@@ -115,7 +115,33 @@ No incluyas explicaciones, solo el JSON.`;
 // dejarla vacía. Eso no es una respuesta: cuenta como "no se habló".
 // El resumen del CV viaja al informe: una frase sobre un CV que no existe no debe llegar ahí.
 const SIN_CV = /^\s*(no hay (un )?cv|sin cv|no (se )?(adjunt|cuenta con|dispone|proporcion)|el cv no)/i;
-const RELLENO = /^\s*(no se (abord|habl|detall|mencion|dijo|profundiz|especific|brind|indic|sabe)|no (hay|consta|figura|surge|se registra)\b|sin (detalles?|informaci[oó]n|datos|evidencia|mencion)|no (fue|fueron) (abordad|mencionad|detallad))/i;
+const RELLENO = /^\s*(no se (abord|habl|detall|mencion|dijo|profundiz|especific|brind|indic|sabe)|no (hay|consta|figura|surge|se registra)\s+(informaci[oó]n|datos?|evidencia|detalles?|menci[oó]n|referencias?)\b|sin (detalles?|informaci[oó]n|datos|evidencia|mencion)|no (fue|fueron) (abordad|mencionad|detallad))/i;
+
+
+// Si la IA no devolvió el sueldo en partes pero sí como texto ("3.200 USD mensuales",
+// "$4,1M brutos", "15.000 - 16.000 USD"), se convierte acá con reglas fijas, sin IA.
+// Si hay un rango se toma el monto más alto. Lo dudoso (moneda, período) queda vacío.
+function parsearSueldoTexto(texto) {
+  const t = String(texto || '').toLowerCase();
+  const montos = [];
+  for (const m of t.matchAll(/(\d[\d.,]*)\s*(millones?|mill\b|mm?\b|mil\b|k\b)?/g)) {
+    const crudo = m[1].replace(/[.,]+$/, '');
+    const suf = m[2] || '';
+    let n;
+    if (/^m|^mill/.test(suf)) n = parseFloat(crudo.replace(',', '.')) * 1e6;
+    else if (/^(mil|k)/.test(suf)) n = parseFloat(crudo.replace(',', '.')) * 1e3;
+    else if (/^\d{1,3}([.,]\d{3})+$/.test(crudo)) n = Number(crudo.replace(/[.,]/g, ''));
+    else if (/^\d+[.,]\d{1,2}$/.test(crudo)) n = Math.round(parseFloat(crudo.replace(',', '.')));
+    else n = Number(crudo);
+    if (Number.isFinite(n) && n > 0) montos.push(Math.round(n));
+  }
+  if (!montos.length) return null;
+  const usd = /usd|u\$s|us\$|d[oó]lar/.test(t);
+  const ars = !usd && (/\$|ars|peso/.test(t));
+  const hora = /por hora|\/\s*h\b|la hora|\bhora\b/.test(t);
+  const mensual = !hora && /mensual|por mes|al mes|\/\s*mes|\bmes\b/.test(t);
+  return { monto: String(Math.max(...montos)), moneda: usd ? 'USD' : ars ? 'ARS' : '', periodo: hora ? 'hora' : mensual ? 'mensual' : '' };
+}
 
 function limpiarPrefill(parsed, preguntas) {
   const p = parsed && typeof parsed === 'object' ? parsed : {};
@@ -136,9 +162,11 @@ function limpiarPrefill(parsed, preguntas) {
   const monto = Number(String(sd.monto ?? '').replace(/[^0-9]/g, ''));
   const moneda = String(sd.moneda || '').toUpperCase();
   const periodo = String(sd.periodo || '').toLowerCase();
-  const sueldo = Number.isFinite(monto) && monto > 0
+  const sueldoIA = Number.isFinite(monto) && monto > 0
     ? { monto: String(monto), moneda: ['USD', 'ARS'].includes(moneda) ? moneda : '', periodo: ['mensual', 'hora'].includes(periodo) ? periodo : '' }
     : null;
+  // Respaldo: si la IA solo dio el texto, se convierte con reglas fijas.
+  const sueldo = sueldoIA || parsearSueldoTexto(str(p.pretension_salarial));
   const motivo = RELLENO.test(str(p.motivo_cambio)) ? '' : str(p.motivo_cambio);
   const vacaciones = RELLENO.test(str(p.vacaciones)) ? '' : str(p.vacaciones);
   const otros = ['si', 'sí', 'no'].includes(str(p.otros_procesos).toLowerCase()) ? (str(p.otros_procesos).toLowerCase() === 'no' ? 'no' : 'si') : '';
@@ -163,4 +191,4 @@ function limpiarPrefill(parsed, preguntas) {
   };
 }
 
-module.exports = { MAX_NOTAS, MAX_TOKENS_RESPUESTA, PILLS, recortarNotas, resumirCriterios, construirPrompt, limpiarPrefill };
+module.exports = { parsearSueldoTexto, MAX_NOTAS, MAX_TOKENS_RESPUESTA, PILLS, recortarNotas, resumirCriterios, construirPrompt, limpiarPrefill };
