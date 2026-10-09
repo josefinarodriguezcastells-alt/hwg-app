@@ -107,7 +107,7 @@ test('owner: arma el informe, lee todas las notas en orden, usa los criterios y 
   const ia = llamadas.filter(l => l.url.startsWith('https://api.anthropic.com'));
   assert.equal(ia.length, 1);
   const cuerpo = JSON.parse(ia[0].body);
-  assert.equal(cuerpo.model, 'claude-haiku-4-5-20251001'); assert.equal(cuerpo.max_tokens, 5000);
+  assert.equal(cuerpo.model, 'claude-haiku-4-5-20251001'); assert.equal(cuerpo.max_tokens, 8000);
   const prompt = cuerpo.messages[0].content;
   assert.ok(prompt.indexOf('Primera charla') < prompt.indexOf('Segunda charla'), 'notas de la más vieja a la más nueva');
   assert.ok(prompt.includes('El cliente acepta 3 años'), 'ajustes acordados con el cliente');

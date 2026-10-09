@@ -181,7 +181,7 @@ test('informe completo: formato nuevo + campos del formato anterior + chequeo de
   assert.deepEqual(inf.culturalTags, ['Startup', 'Ownership']);
   // "estimado" nunca llega al informe
   assert.ok(inf.techStack.every(t => !/estimad/i.test(t.years)));
-  assert.equal(inf.qa.length, 7);
+  assert.equal(inf.qa.length, 8);
   assert.ok(inf.qa.find(q => q.clave === 'con_evidencia').ok);
   assert.ok(inf.qa.find(q => q.clave === 'tech_stack').ok);
 });
@@ -280,4 +280,21 @@ test('notas: si una nota no entra por poco, entra lo que cabe en vez de perderla
   assert.ok(r.texto.includes('INICIO') && r.texto.includes('FINAL'), 'principio y final de la grande');
   assert.ok(r.texto.includes('nnnn'), 'y la nueva completa');
   assert.ok(r.texto.length <= 20000);
+});
+
+test('un "no" apoyado solo en el CV queda sin dato; un "no" dicho en la entrevista se mantiene', () => {
+  const desdeCV = M.juzgarCriterios([CRITERIOS[0]], M.limpiarIA({ criterios: [{ n: 1, veredicto: 'no', cita: 'Gerente comercial en Rappi 2016-2019', fuente: 'cv' }] }), FUENTES);
+  assert.equal(desdeCV[0].veredicto, 'sin_dato'); assert.match(desdeCV[0].aviso, /solo en el CV/);
+  const desdeNotas = M.juzgarCriterios([CRITERIOS[0]], M.limpiarIA({ criterios: [{ n: 1, veredicto: 'no', cita: 'Me fui porque la empresa recortó el área', fuente: 'notas' }] }), FUENTES);
+  assert.equal(desdeNotas[0].veredicto, 'no');
+});
+
+test('datos sensibles: el pedido los prohíbe y el chequeo los detecta', () => {
+  assert.match(M.construirPrompt(entrada()).sistema, /DATOS PERSONALES SENSIBLES/);
+  const sucio = M.ensamblarInforme({ entrada: entrada(), ia: { ...IA_OK, storytelling: 'Se fue por una situación médica familiar y volvió.' }, fuentes: FUENTES });
+  assert.equal(sucio.qa.find(q => q.clave === 'sin_datos_sensibles').ok, false);
+  const limpio = M.ensamblarInforme({ entrada: entrada(), ia: { ...IA_OK, storytelling: 'Se fue por motivos personales y hoy está disponible.' }, fuentes: FUENTES });
+  assert.equal(limpio.qa.find(q => q.clave === 'sin_datos_sensibles').ok, true);
+  for (const f of ['tratamiento médico', 'su embarazo', 'una enfermedad', 'divorcio']) assert.ok(M.SENSIBLES.test(f), f);
+  assert.ok(!M.SENSIBLES.test('Lideró un equipo de salud digital'.replace('salud', 'ventas')));
 });

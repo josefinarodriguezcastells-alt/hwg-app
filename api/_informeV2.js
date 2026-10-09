@@ -180,6 +180,10 @@ function recomendacion(ranking) {
 }
 
 // ── Pedido a la IA ───────────────────────────────────────────────────────────
+// Datos personales sensibles que no deben llegar al cliente (salud, familia, religión,
+// política, embarazo, discapacidad...). Si el motivo es personal se escribe "motivos personales".
+const SENSIBLES = /\b(m[eé]dic[oa]s?|enferm\w*|salud|c[aá]ncer|embaraz\w*|divorci\w*|separaci[oó]n|fallecimiento|falleci[oó]|duelo|depresi[oó]n|ansiedad|terapia|psic[oó]log\w*|discapacidad|religi[oó]n|religios\w*|pol[ií]tic[oa]s?|hij[oa]s? (enferm\w*|con)|tratamiento)\b/i;
+
 const PROHIBIDAS = ['sólida trayectoria', 'solida trayectoria', 'perfil versátil', 'perfil versatil', 'orientado a resultados', 'gran potencial', 'excelente comunicador', 'excelente comunicadora', 'estimado'];
 
 function construirPrompt(e) {
@@ -192,8 +196,9 @@ REGLAS QUE NO SE NEGOCIAN:
 1. NUNCA inventes. Todo dato sale de las NOTAS, del CV o del SCORECARD. Si algo no está, no lo afirmes.
 2. Cada juicio sobre un criterio lleva una CITA: copiada TEXTUAL (palabra por palabra, máx. 200 caracteres) de las notas, del CV o del scorecard. El sistema verifica que la cita exista; si no existe, el juicio se descarta. No parafrasees dentro de la cita.
 3. Veredictos: "cumple" SOLO si la cita afirma directamente lo que pide el criterio (si la cita habla de algo parecido o relacionado, pero no de lo que pide el criterio, es "parcial" o "sin_dato"); "parcial" (cumple en parte); "no" (evidencia explícita en contra, con cita); "sin_dato" (no se habló ni surge del CV). Que algo no se haya mencionado NO es "no": es "sin_dato". "sin_dato" no penaliza. Ante la duda entre "cumple" y "parcial", elegí "parcial".
-4. PROHIBIDO en el texto: "sólida trayectoria", "perfil versátil", "orientado a resultados", "gran potencial", "excelente comunicador/a" y la palabra "estimado".
-5. Respondé en español, solo con JSON válido.
+4. DATOS PERSONALES SENSIBLES (salud, embarazo, enfermedades, situación familiar delicada, religión, política): NO los escribas en ningún campo. Si el motivo del cambio o de una salida es personal, escribí "motivos personales".
+5. PROHIBIDO en el texto: "sólida trayectoria", "perfil versátil", "orientado a resultados", "gran potencial", "excelente comunicador/a" y la palabra "estimado".
+6. Respondé en español, solo con JSON válido.
 
 STORYTELLING (máximo ${MAX_STORYTELLING} caracteres, un párrafo): suena a una persona hablándole al cliente. Cuenta los últimos trabajos con su logro y su motivo de salida, y por qué es la persona ideal para ESTA búsqueda. ${sinNotas ? 'NO HAY NOTAS de entrevista: escribí 2-3 frases basadas solo en el CV y empezá exactamente con "Nota: este perfil se armó solo con el CV, sin entrevista previa."' : pocas ? 'Hay POCAS notas: escribí un texto corto y honesto con lo que salió de la entrevista; no lo rellenes con el CV.' : 'Tiene que salir de la ENTREVISTA, con las palabras del candidato; una frase apoyada solo en el CV no se usa.'}
 
@@ -267,6 +272,10 @@ function juzgarCriterios(criterios, ia, fuentes) {
     const fuenteOk = cita ? candidatas.find(f => citaExiste(cita, fuentes[f] || '')) : null;
     let citaVerificada = !!fuenteOk;
     let nota = '';
+    if (veredicto === 'no' && citaVerificada && fuenteOk === 'cv') {
+      nota = 'Un "no" apoyado solo en el CV queda sin dato: lo que no aparece en un CV no prueba que no lo tenga';
+      veredicto = 'sin_dato';
+    }
     if (veredicto !== 'sin_dato' && !citaVerificada) {
       nota = cita ? 'La cita no se encontró en las notas ni en el CV: queda sin dato' : 'Sin cita que lo respalde: queda sin dato';
       veredicto = 'sin_dato';
@@ -362,6 +371,8 @@ function chequeoCalidad(inf, { sinNotas, criteriosConfirmados }) {
       `${inf.mirada.gaps.length} gap(s), ${inf.mirada.gaps.filter(g => g.pregunta).length} con pregunta`),
     item('tech_stack', inf.techStack.length >= 5 && inf.techStack.length <= 10,
       `${inf.techStack.length} herramientas`),
+    item('sin_datos_sensibles', !SENSIBLES.test([inf.storytelling, inf.header.motivoCambio, inf.header.vacaciones, inf.mirada.porQueIdeal, inf.fitCultural].join(' ')),
+      'sin datos personales sensibles en el texto que ve el cliente'),
     item('sin_contradicciones', !incoherente, incoherente ? 'la recomendación no coincide con el ranking' : 'ranking y recomendación coinciden'),
   ];
 }
@@ -435,7 +446,7 @@ function ensamblarInforme({ entrada, ia: iaCruda, fuentes }) {
 }
 
 module.exports = {
-  MAX_NOTAS, MAX_CV, MAX_JD_RESPALDO, MAX_STORYTELLING, REC, PROHIBIDAS,
+  SENSIBLES, MAX_NOTAS, MAX_CV, MAX_JD_RESPALDO, MAX_STORYTELLING, REC, PROHIBIDAS,
   normalizar, citaExiste, recortarMedio, juntarNotasCandidato, criteriosDeJD,
   parsearBanda, compararConBanda, sueldoDeTextoViejo, calcularRanking, recomendacion,
   serializarScorecard, costoAprox, construirPrompt, limpiarIA, juzgarCriterios, armarEncabezado, chequeoCalidad, ensamblarInforme,
