@@ -120,7 +120,7 @@ test('modelo elegido: el servidor lo fija, no el navegador', async () => {
   const ia = llamadas.find(l => l.url.startsWith('https://api.anthropic.com'));
   assert.equal(JSON.parse(ia.body).model, 'claude-sonnet-5-5');
   assert.equal('temperature' in JSON.parse(ia.body), false, 'los modelos nuevos no aceptan temperature');
-  assert.equal('thinking' in JSON.parse(ia.body), false, 'los modelos nuevos no piensan antes de responder: no se manda nada');
+  assert.deepEqual(JSON.parse(ia.body).thinking, { type: 'between_tools' }, 'así se apaga el razonamiento previo en estos modelos (gastaba el cupo de salida)');
 });
 
 test('CV ilegible: 400 claro y no se gasta IA', async () => {
