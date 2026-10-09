@@ -96,6 +96,21 @@ test('limpiarPrefill: descarta preguntas inexistentes y valores inválidos, y an
   assert.deepEqual(r.fit_cultural_pills, ['startup']);
 });
 
+test('limpiarPrefill: "No se abordó en detalle" no es una respuesta, es un "no se habló"', () => {
+  const r = limpiarPrefill({ respuestas: {
+    q_motivo: 'No se abordó en detalle en la entrevista',
+    q_ingles: '4',
+  } }, [...PREGUNTAS, { id: 'q_otro', label: 'Otro', tipo: 'texto' }, { id: 'q_x', label: 'X', tipo: 'texto' }]);
+  assert.deepEqual(r.respuestas, { q_ingles: '4' });
+  assert.deepEqual(r.no_se_hablo, ['q_motivo']);
+  for (const frase of ['Sin información sobre esto', 'No hay información', 'No se mencionó', 'No se detalló el impacto']) {
+    assert.equal(Object.keys(limpiarPrefill({ respuestas: { q_x: frase } }, [{ id: 'q_x', tipo: 'texto' }]).respuestas).length, 0, frase);
+  }
+  // una respuesta real que contiene "no" o menciona la falta de un detalle no se descarta
+  assert.equal(limpiarPrefill({ respuestas: { q_x: 'Maneja Excel avanzado; no hay información sobre macros' } }, [{ id: 'q_x', tipo: 'texto' }]).respuestas.q_x, 'Maneja Excel avanzado; no hay información sobre macros');
+  assert.equal(limpiarPrefill({ respuestas: { q_x: 'Nota: no tiene otros procesos' } }, [{ id: 'q_x', tipo: 'texto' }]).respuestas.q_x, 'Nota: no tiene otros procesos');
+});
+
 test('limpiarPrefill: aguanta basura sin romperse', () => {
   assert.deepEqual(limpiarPrefill(null, PREGUNTAS).respuestas, {});
   assert.deepEqual(limpiarPrefill({ respuestas: 'hola', no_se_hablo: 5 }, PREGUNTAS).no_se_hablo, []);

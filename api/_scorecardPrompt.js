@@ -80,7 +80,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
 Para las respuestas:
 - tipo "si_no": "si" o "no"; si no hay base, no la incluyas
 - tipo "escala": número del 1 al 5 como string; si no hay base, no la incluyas
-- tipo "texto": texto breve basado en lo que se dijo; si no hay base, no la incluyas
+- tipo "texto": texto breve basado en lo que se dijo; si no hay base, NO la incluyas (nunca escribas frases como "no se abordó" o "sin información": dejala afuera y listala en no_se_hablo)
 - tipo "opciones": una de las opciones disponibles; si no hay base, no la incluyas
 
 Para fit_cultural_pills usá solo estos ids: ${PILLS.join(', ')}
@@ -105,19 +105,25 @@ No incluyas explicaciones, solo el JSON.`;
 
 // La IA a veces devuelve cosas fuera de lo pedido. Se deja solo lo que el
 // scorecard sabe usar: respuestas de preguntas que existen, con valores válidos.
+// A veces la IA escribe "No se abordó en detalle..." como respuesta en vez de
+// dejarla vacía. Eso no es una respuesta: cuenta como "no se habló".
+const RELLENO = /^\s*(no se (abord|habl|detall|mencion|dijo|profundiz|especific|brind|indic|sabe)|no (hay|consta|figura|surge|se registra)\b|sin (detalles?|informaci[oó]n|datos|evidencia|mencion)|no (fue|fueron) (abordad|mencionad|detallad))/i;
+
 function limpiarPrefill(parsed, preguntas) {
   const p = parsed && typeof parsed === 'object' ? parsed : {};
   const porId = Object.fromEntries((preguntas || []).map(q => [q.id, q]));
   const respuestas = {};
+  const relleno = [];
   for (const [id, v] of Object.entries(p.respuestas && typeof p.respuestas === 'object' ? p.respuestas : {})) {
     const q = porId[id];
     if (!q || typeof v !== 'string' || !v.trim()) continue;
+    if (RELLENO.test(v)) { relleno.push(id); continue; }
     if (q.tipo === 'escala' && !/^[1-5]$/.test(v.trim())) continue;
     if (q.tipo === 'si_no' && !['si', 'sí', 'no'].includes(v.trim().toLowerCase())) continue;
     if (q.tipo === 'opciones' && !(q.opciones || []).includes(v.trim())) continue;
     respuestas[id] = v.trim();
   }
-  const noSeHablo = (Array.isArray(p.no_se_hablo) ? p.no_se_hablo : [])
+  const noSeHablo = [...(Array.isArray(p.no_se_hablo) ? p.no_se_hablo : []), ...relleno]
     .filter(id => porId[id] && !respuestas[id]);
   const str = x => (typeof x === 'string' ? x.trim() : '');
   return {
