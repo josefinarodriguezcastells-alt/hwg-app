@@ -235,3 +235,33 @@ test('costo aproximado: función de tokens y modelo', () => {
   assert.equal(M.costoAprox('haiku', 10000, 2000), 0.02);
   assert.equal(M.costoAprox('desconocido', 1, 1), 0);
 });
+
+test('encabezado: si el scorecard es viejo, motivo, vacaciones y otros procesos salen de las notas y se marca el origen', () => {
+  const viejo = { ...SCORECARD, obligatorio: { salario: 'USD 6.000 mensual' } };
+  const h = M.armarEncabezado({ ...entrada({ scorecard: viejo }), datosIA: { motivoCambio: 'Recorte', vacaciones: 'Enero', otrosProcesos: 'no' } });
+  assert.deepEqual([h.motivoCambio, h.vacaciones, h.otrosProcesos], ['Recorte', 'Enero', 'no']);
+  assert.deepEqual(h.origen, { vacaciones: 'notas', motivoCambio: 'notas', otrosProcesos: 'notas' });
+  const nuevo = M.armarEncabezado({ ...entrada(), datosIA: { motivoCambio: 'Otro motivo de la IA' } });
+  assert.equal(nuevo.motivoCambio, 'Recorte del área', 'lo cargado por la recruiter manda sobre lo de la IA');
+  assert.equal(nuevo.origen.motivoCambio, 'scorecard');
+});
+
+test('sueldo viejo en texto: se lee solo para comparar con la banda, sin cambiar lo que se muestra', () => {
+  assert.deepEqual(M.sueldoDeTextoViejo('USD 6.000 mensual'), { monto: '6000', moneda: 'USD', periodo: 'mensual' });
+  assert.deepEqual(M.sueldoDeTextoViejo('Actualmente USD 10.000 mensual salario adicional 13 y 14 el 15 es bono'), { monto: '10000', moneda: 'USD', periodo: 'mensual' });
+  assert.equal(M.sueldoDeTextoViejo('4.5 netos'), null, 'sin moneda clara y número chico: no se compara');
+  assert.equal(M.sueldoDeTextoViejo('a negociar'), null);
+  assert.equal(M.sueldoDeTextoViejo('-'), null);
+  const sc = { ...SCORECARD, obligatorio: { salario: 'USD 6.000 mensual' } };
+  const h = M.armarEncabezado(entrada({ scorecard: sc }));
+  assert.equal(h.sueldo.texto, 'USD 6.000 mensual'); assert.equal(h.sueldo.comparacion, 'arriba');
+});
+
+test('el pedido exige que la cita afirme directamente el criterio y pide los datos de la entrevista', () => {
+  const p = M.construirPrompt(entrada());
+  assert.match(p.sistema, /afirma directamente lo que pide el criterio/);
+  assert.match(p.sistema, /"motivoCambio"/);
+  assert.match(p.sistema, /no repitas el mismo número de años/);
+  const ia = M.limpiarIA({ datos: { motivoCambio: ' Recorte ', vacaciones: 5, otrosProcesos: 'SI' } });
+  assert.deepEqual(ia.datos, { motivoCambio: 'Recorte', vacaciones: '', otrosProcesos: 'si' });
+});
