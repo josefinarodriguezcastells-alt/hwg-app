@@ -7,6 +7,8 @@
 // 30.000 caracteres son unas 8.000 palabras: una entrevista larga entra entera.
 
 const MAX_NOTAS = 30000;
+// Datos fijos del scorecard (no son preguntas del template) que también pueden quedar en "no se habló".
+const CAMPOS_FIJOS = ['sueldo', 'motivo_cambio', 'vacaciones', 'otros_procesos'];
 const MAX_CRITERIOS = 12;
 const MAX_CALIBRACIONES = 6;
 const MAX_TOKENS_RESPUESTA = 3000;
@@ -62,13 +64,17 @@ ${tieneNotas
   ? 'FUENTE PRINCIPAL: las notas/transcripción de la entrevista — reflejá lo que el candidato realmente dijo, no solo lo que figura en el CV. El CV es contexto de trayectoria; la entrevista es la fuente de verdad sobre esta persona hoy. Si las notas y el CV se contradicen, ganan las notas.'
   : 'No hay entrevista todavía — completá en base al CV únicamente, y para las preguntas que dependen de haber hablado con el candidato (impresión personal, comunicación, etc.) no respondas.'}
 
-REGLA DE ORO: nunca inventes. Si algo no se habló en las notas ni surge del CV, NO lo respondas: dejá la respuesta vacía y poné el id de la pregunta en "no_se_hablo". Es mejor un campo vacío que uno inventado.
+REGLA DE ORO: nunca inventes. Si algo no se habló en las notas ni surge del CV, NO lo respondas: dejá la respuesta vacía y poné el id de la pregunta en "no_se_hablo". Lo mismo vale para los datos fijos: si no se habló del sueldo, del motivo del cambio, de las vacaciones o de otros procesos, dejalos vacíos y poné "sueldo", "motivo_cambio", "vacaciones" u "otros_procesos" en "no_se_hablo". Es mejor un campo vacío que uno inventado.
 
 Devolvé ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
 {
   "nombre_apellido": "string — nombre completo del candidato",
   "anios_experiencia": "string — años de experiencia RELEVANTES para el puesto, calculados con las fechas del CV (no estimados a ojo), con el cálculo corto entre paréntesis. Ej: '6 años en Data Engineering (2019–2025)'. Vacío si no hay fechas.",
   "pretension_salarial": "string — solo si se dijo en las notas o está en el CV, con monto y moneda tal cual. Sino ''",
+  "sueldo": { "monto": "número entero sin puntos ni símbolos, o null si no se dijo (si dijo un rango, el monto más alto)", "moneda": "USD o ARS (pesos), o '' si no queda claro", "periodo": "mensual o hora, o '' si no queda claro" },
+  "motivo_cambio": "string — por qué busca cambiar de trabajo, con sus palabras y breve. Vacío si no se habló.",
+  "vacaciones": "string — vacaciones ya agendadas o viajes planeados que afecten la fecha de inicio. Vacío si no se habló.",
+  "otros_procesos": "\"si\" si dijo que tiene otros procesos de selección abiertos, \"no\" si dijo que no tiene, \"\" si no se habló",
   "fit_cultural_pills": ["ids de pills culturales que mejor describen al candidato, solo si hay base real"],
   "respuestas": {
     "[id_pregunta]": "valor pre-completado según el tipo de pregunta"
@@ -125,13 +131,31 @@ function limpiarPrefill(parsed, preguntas) {
     if (q.tipo === 'opciones' && !(q.opciones || []).includes(v.trim())) continue;
     respuestas[id] = v.trim();
   }
-  const noSeHablo = [...(Array.isArray(p.no_se_hablo) ? p.no_se_hablo : []), ...relleno]
-    .filter(id => porId[id] && !respuestas[id]);
   const str = x => (typeof x === 'string' ? x.trim() : '');
+  const sd = p.sueldo && typeof p.sueldo === 'object' ? p.sueldo : {};
+  const monto = Number(String(sd.monto ?? '').replace(/[^0-9]/g, ''));
+  const moneda = String(sd.moneda || '').toUpperCase();
+  const periodo = String(sd.periodo || '').toLowerCase();
+  const sueldo = Number.isFinite(monto) && monto > 0
+    ? { monto: String(monto), moneda: ['USD', 'ARS'].includes(moneda) ? moneda : '', periodo: ['mensual', 'hora'].includes(periodo) ? periodo : '' }
+    : null;
+  const motivo = RELLENO.test(str(p.motivo_cambio)) ? '' : str(p.motivo_cambio);
+  const vacaciones = RELLENO.test(str(p.vacaciones)) ? '' : str(p.vacaciones);
+  const otros = ['si', 'sí', 'no'].includes(str(p.otros_procesos).toLowerCase()) ? (str(p.otros_procesos).toLowerCase() === 'no' ? 'no' : 'si') : '';
+  const fijosVacios = { sueldo: !sueldo, motivo_cambio: !motivo, vacaciones: !vacaciones, otros_procesos: !otros };
+  // Un dato fijo que quedó vacío es, por definición, algo que no se habló.
+  const noSeHablo = [
+    ...[...(Array.isArray(p.no_se_hablo) ? p.no_se_hablo : []), ...relleno].filter(id => porId[id] && !respuestas[id]),
+    ...CAMPOS_FIJOS.filter(id => fijosVacios[id]),
+  ];
   return {
     nombre_apellido: str(p.nombre_apellido),
     anios_experiencia: str(p.anios_experiencia),
     pretension_salarial: str(p.pretension_salarial),
+    sueldo,
+    motivo_cambio: motivo,
+    vacaciones,
+    otros_procesos: otros,
     fit_cultural_pills: (Array.isArray(p.fit_cultural_pills) ? p.fit_cultural_pills : []).filter(x => PILLS.includes(x)),
     respuestas,
     no_se_hablo: [...new Set(noSeHablo)],
