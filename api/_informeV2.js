@@ -311,7 +311,17 @@ function sueldoDeTextoViejo(texto) {
   const ars = !usd && /\$|ars|peso/.test(t);
   if (!usd && !ars) return null;
   const hora = /por hora|\/\s*h\b|\bhora\b/.test(t);
-  return { monto: String(Math.max(...montos)), moneda: usd ? 'USD' : 'ARS', periodo: hora ? 'hora' : 'mensual' };
+  const mensual = !hora && /mensual|por mes|al mes|\/\s*mes|\bmes\b/.test(t);
+  return { monto: String(Math.max(...montos)), moneda: usd ? 'USD' : 'ARS', periodo: hora ? 'hora' : mensual ? 'mensual' : '' };
+}
+
+// "USD 3.500 mensual" / "$ 2.000.000 mensual" / "USD 25 por hora" (igual que en el ATS).
+function textoSueldo({ monto, moneda, periodo } = {}) {
+  const m = String(monto || '').replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+  if (!m) return '';
+  const cifra = m.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const base = moneda === 'ARS' ? `$ ${cifra}` : moneda === 'USD' ? `USD ${cifra}` : cifra;
+  return base + (periodo === 'hora' ? ' por hora' : periodo === 'mensual' ? ' mensual' : '');
 }
 
 function armarEncabezado({ scorecard, posicion, candidato, datosIA }) {
@@ -322,6 +332,8 @@ function armarEncabezado({ scorecard, posicion, candidato, datosIA }) {
     ? { monto: String(n.monto), moneda: n.moneda || '', periodo: n.periodo || '' }
     : sueldoDeTextoViejo(o.salario);
   const banda = parsearBanda(posicion.salary_band, posicion.salary_currency);
+  const originalSueldo = String(o.salario || '').trim();
+  const sueldoNormal = sueldo ? textoSueldo(sueldo) : '';
   const ia = datosIA || {};
   const motivo = (o.motivo_cambio || '').trim();
   const vac = (o.vacaciones || '').trim();
@@ -329,8 +341,11 @@ function armarEncabezado({ scorecard, posicion, candidato, datosIA }) {
   return {
     ubicacion: candidato.location || '',
     modalidad: posicion.modality || '',
+    // El sueldo se muestra UNA vez y siempre igual ("USD 10.000 mensual"). Si el texto
+    // original traía aclaraciones (bonos, 13 y 14...) queda aparte como nota, solo para la recruiter.
     sueldo: {
-      texto: visible ? (o.salario || '') : '',
+      texto: visible ? (sueldoNormal || originalSueldo) : '',
+      nota: visible && sueldoNormal && originalSueldo && sueldoNormal !== originalSueldo ? originalSueldo : '',
       visible,
       comparacion: visible ? compararConBanda(sueldo, banda) : null,
     },
@@ -448,6 +463,6 @@ function ensamblarInforme({ entrada, ia: iaCruda, fuentes }) {
 module.exports = {
   SENSIBLES, MAX_NOTAS, MAX_CV, MAX_JD_RESPALDO, MAX_STORYTELLING, REC, PROHIBIDAS,
   normalizar, citaExiste, recortarMedio, juntarNotasCandidato, criteriosDeJD,
-  parsearBanda, compararConBanda, sueldoDeTextoViejo, calcularRanking, recomendacion,
+  parsearBanda, compararConBanda, sueldoDeTextoViejo, textoSueldo, calcularRanking, recomendacion,
   serializarScorecard, costoAprox, construirPrompt, limpiarIA, juzgarCriterios, armarEncabezado, chequeoCalidad, ensamblarInforme,
 };
