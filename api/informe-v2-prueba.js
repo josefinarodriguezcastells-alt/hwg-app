@@ -36,11 +36,14 @@ async function llamarIA(modelo, sistema, usuario) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: MODELOS[modelo], max_tokens: MAX_TOKENS_RESPUESTA, ...(modelo === 'haiku' ? { temperature: 0.2 } : {}), system: sistema, messages: [{ role: 'user', content: usuario }] }),
+    body: JSON.stringify({ model: MODELOS[modelo], max_tokens: MAX_TOKENS_RESPUESTA, ...(modelo === 'haiku' ? { temperature: 0.2 } : { thinking: { type: 'disabled' } }), system: sistema, messages: [{ role: 'user', content: usuario }] }),
   });
   const data = await r.json();
   if (!r.ok) throw new Error(data.error?.message || 'Error de la IA');
-  if (data.stop_reason === 'max_tokens') throw new Error('La respuesta de la IA quedó cortada');
+  if (data.stop_reason === 'max_tokens') {
+    const tipos = (data.content || []).map(c => `${c.type}:${(c.text || c.thinking || '').length}`).join(', ');
+    throw new Error(`La respuesta de la IA quedó cortada (salida ${data.usage?.output_tokens || '?'} tokens; bloques ${tipos})`);
+  }
   const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text || '').join('').replace(/```json|```/g, '').trim();
   const m = txt.match(/\{[\s\S]*\}/);
   let json;
