@@ -36,7 +36,7 @@ async function llamarIA(modelo, sistema, usuario) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: MODELOS[modelo], max_tokens: MAX_TOKENS_RESPUESTA, temperature: 0.2, system: sistema, messages: [{ role: 'user', content: usuario }] }),
+    body: JSON.stringify({ model: MODELOS[modelo], max_tokens: MAX_TOKENS_RESPUESTA, ...(modelo === 'haiku' ? { temperature: 0.2 } : {}), system: sistema, messages: [{ role: 'user', content: usuario }] }),
   });
   const data = await r.json();
   if (!r.ok) throw new Error(data.error?.message || 'Error de la IA');
@@ -107,7 +107,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       ok: true, informe,
       uso: { modelo: MODELOS[modelo], entrada: uso.input_tokens || 0, salida: uso.output_tokens || 0, costo_usd_aprox: I.costoAprox(modelo, uso.input_tokens || 0, uso.output_tokens || 0) },
-      entrada: { documentos_de_notas: notas.cantidad, largo_por_documento: textosNotas.map(d => ({ nombre: d.nombre, fecha: d.fecha, chars: d.texto.length })), notas_chars: entrada.notasTexto.length, notas_recortadas: notas.recortado, cv_chars: cv.length, criterios: entrada.criterios.length, origen_criterios: jd.origen, criterios_confirmados: jd.confirmados, scorecard: !!scorecard },
+      entrada: { documentos_de_notas: notas.cantidad, largo_por_documento: textosNotas.map(d => ({ nombre: d.nombre, fecha: d.fecha, chars: d.texto.length })), notas_chars: entrada.notasTexto.length, notas_recortadas: notas.recortado, notas_duplicadas: notas.duplicadas, cv_chars: cv.length, criterios: entrada.criterios.length, origen_criterios: jd.origen, criterios_confirmados: jd.confirmados, scorecard: !!scorecard },
     });
   } catch (e) {
     console.error('informe-v2-prueba error:', e);
