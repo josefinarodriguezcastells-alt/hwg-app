@@ -119,6 +119,7 @@ test('modelo elegido: el servidor lo fija, no el navegador', async () => {
   await post({ application_id: APP, modelo: 'sonnet' }, 'owner');
   const ia = llamadas.find(l => l.url.startsWith('https://api.anthropic.com'));
   assert.equal(JSON.parse(ia.body).model, 'claude-sonnet-5-5');
+  assert.equal('temperature' in JSON.parse(ia.body), false, 'los modelos nuevos no aceptan temperature');
 });
 
 test('CV ilegible: 400 claro y no se gasta IA', async () => {

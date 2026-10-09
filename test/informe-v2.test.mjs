@@ -32,7 +32,7 @@ test('varias notas: se leen todas, de la más vieja a la más nueva', () => {
 
 test('si las notas no entran, se descartan primero las más viejas y se avisa', () => {
   const r = M.juntarNotasCandidato([{ texto: 'VIEJA' + 'x'.repeat(600) }, { texto: 'NUEVA' + 'y'.repeat(600) }], 1000);
-  assert.ok(r.texto.includes('NUEVA') && !r.texto.includes('VIEJA'));
+  assert.ok(r.texto.includes('NUEVA') && !r.texto.includes('VIEJA'), 'queda poco lugar: la vieja no se mete');
   assert.equal(r.recortado, true);
   assert.equal(M.juntarNotasCandidato([]).texto, '');
   const gigante = M.juntarNotasCandidato([{ texto: 'INICIO' + 'z'.repeat(5000) + 'FINAL' }], 1000);
@@ -264,4 +264,20 @@ test('el pedido exige que la cita afirme directamente el criterio y pide los dat
   assert.match(p.sistema, /no repitas el mismo número de años/);
   const ia = M.limpiarIA({ datos: { motivoCambio: ' Recorte ', vacaciones: 5, otrosProcesos: 'SI' } });
   assert.deepEqual(ia.datos, { motivoCambio: 'Recorte', vacaciones: '', otrosProcesos: 'si' });
+});
+
+test('notas: el mismo texto subido dos veces cuenta una sola vez', () => {
+  const dup = 'Entrevista larga. '.repeat(100);
+  const r = M.juntarNotasCandidato([{ texto: dup, nombre: 'a' }, { texto: dup, nombre: 'b' }, { texto: 'Otra nota distinta' }]);
+  assert.equal(r.cantidad, 2); assert.equal(r.duplicadas, 1);
+  assert.equal(r.texto.split('Entrevista larga.').length - 1, 100, 'una sola copia');
+});
+
+test('notas: si una nota no entra por poco, entra lo que cabe en vez de perderla entera', () => {
+  const grande = 'INICIO ' + 'g '.repeat(14000) + ' FINAL';
+  const r = M.juntarNotasCandidato([{ texto: grande, nombre: 'grande' }, { texto: 'n'.repeat(1500), nombre: 'chica' }], 20000);
+  assert.ok(r.recortado);
+  assert.ok(r.texto.includes('INICIO') && r.texto.includes('FINAL'), 'principio y final de la grande');
+  assert.ok(r.texto.includes('nnnn'), 'y la nueva completa');
+  assert.ok(r.texto.length <= 20000);
 });

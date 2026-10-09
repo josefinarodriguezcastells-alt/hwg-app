@@ -77,22 +77,33 @@ function recortarMedio(texto, max) {
 // Varias notas del mismo candidato: se leen todas, de la más vieja a la más nueva.
 // Si no entran, se descartan primero las más viejas (lo último que dijo manda).
 function juntarNotasCandidato(docs, max = MAX_NOTAS) {
-  const bloques = (docs || [])
-    .filter(d => d && String(d.texto || '').trim())
-    .map(d => `[NOTAS subidas el ${d.fecha || 's/f'} — ${d.nombre || 'archivo'}]\n${String(d.texto).trim()}`);
+  // El mismo texto subido dos veces cuenta una sola vez (se queda la copia más nueva).
+  const vistos = new Set();
+  const unicos = [];
+  for (const d of [...(docs || [])].reverse()) {
+    const t = String(d?.texto || '').trim();
+    if (!t) continue;
+    const clave = normalizar(t).slice(0, 4000) + '|' + t.length;
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
+    unicos.unshift(d);
+  }
+  const bloques = unicos.map(d => `[NOTAS subidas el ${d.fecha || 's/f'} — ${d.nombre || 'archivo'}]\n${String(d.texto).trim()}`);
   const elegidos = [];
   let largo = 0, recortado = false;
   for (let i = bloques.length - 1; i >= 0; i--) {
-    if (largo + bloques[i].length > max) {
+    const resto = max - largo;
+    if (bloques[i].length > resto) {
       recortado = true;
-      if (elegidos.length === 0) { elegidos.unshift(recortarMedio(bloques[i], max).texto); }
+      // No se descarta una nota entera por unos caracteres: entra lo que cabe
+      // (principio y final) si queda lugar suficiente.
+      if (resto >= 2000 || elegidos.length === 0) elegidos.unshift(recortarMedio(bloques[i], Math.max(200, resto - 100)).texto);
       break;
     }
     elegidos.unshift(bloques[i]);
     largo += bloques[i].length + 2;
   }
-  if (elegidos.length < bloques.length) recortado = true;
-  return { texto: elegidos.join('\n\n'), recortado, cantidad: bloques.length };
+  return { texto: elegidos.join('\n\n'), recortado, cantidad: bloques.length, duplicadas: (docs || []).filter(d => String(d?.texto || '').trim()).length - unicos.length };
 }
 
 // ── Criterios de la JD ───────────────────────────────────────────────────────
