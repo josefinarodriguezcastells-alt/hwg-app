@@ -107,7 +107,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       ok: true, informe,
       uso: { modelo: MODELOS[modelo], entrada: uso.input_tokens || 0, salida: uso.output_tokens || 0, costo_usd_aprox: I.costoAprox(modelo, uso.input_tokens || 0, uso.output_tokens || 0) },
-      entrada: { documentos_de_notas: notas.cantidad, notas_chars: entrada.notasTexto.length, notas_recortadas: notas.recortado, cv_chars: cv.length, criterios: entrada.criterios.length, origen_criterios: jd.origen, criterios_confirmados: jd.confirmados, scorecard: !!scorecard },
+      entrada: { documentos_de_notas: notas.cantidad, largo_por_documento: textosNotas.map(d => ({ nombre: d.nombre, fecha: d.fecha, chars: d.texto.length })), notas_chars: entrada.notasTexto.length, notas_recortadas: notas.recortado, cv_chars: cv.length, criterios: entrada.criterios.length, origen_criterios: jd.origen, criterios_confirmados: jd.confirmados, scorecard: !!scorecard },
     });
   } catch (e) {
     console.error('informe-v2-prueba error:', e);

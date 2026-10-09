@@ -180,13 +180,13 @@ function construirPrompt(e) {
 REGLAS QUE NO SE NEGOCIAN:
 1. NUNCA inventes. Todo dato sale de las NOTAS, del CV o del SCORECARD. Si algo no está, no lo afirmes.
 2. Cada juicio sobre un criterio lleva una CITA: copiada TEXTUAL (palabra por palabra, máx. 200 caracteres) de las notas, del CV o del scorecard. El sistema verifica que la cita exista; si no existe, el juicio se descarta. No parafrasees dentro de la cita.
-3. Veredictos: "cumple" (evidencia clara a favor), "parcial" (cumple en parte), "no" (evidencia explícita en contra, con cita), "sin_dato" (no se habló ni surge del CV). Que algo no se haya mencionado NO es "no": es "sin_dato". "sin_dato" no penaliza.
+3. Veredictos: "cumple" SOLO si la cita afirma directamente lo que pide el criterio (si la cita habla de algo parecido o relacionado, pero no de lo que pide el criterio, es "parcial" o "sin_dato"); "parcial" (cumple en parte); "no" (evidencia explícita en contra, con cita); "sin_dato" (no se habló ni surge del CV). Que algo no se haya mencionado NO es "no": es "sin_dato". "sin_dato" no penaliza. Ante la duda entre "cumple" y "parcial", elegí "parcial".
 4. PROHIBIDO en el texto: "sólida trayectoria", "perfil versátil", "orientado a resultados", "gran potencial", "excelente comunicador/a" y la palabra "estimado".
 5. Respondé en español, solo con JSON válido.
 
 STORYTELLING (máximo ${MAX_STORYTELLING} caracteres, un párrafo): suena a una persona hablándole al cliente. Cuenta los últimos trabajos con su logro y su motivo de salida, y por qué es la persona ideal para ESTA búsqueda. ${sinNotas ? 'NO HAY NOTAS de entrevista: escribí 2-3 frases basadas solo en el CV y empezá exactamente con "Nota: este perfil se armó solo con el CV, sin entrevista previa."' : pocas ? 'Hay POCAS notas: escribí un texto corto y honesto con lo que salió de la entrevista; no lo rellenes con el CV.' : 'Tiene que salir de la ENTREVISTA, con las palabras del candidato; una frase apoyada solo en el CV no se usa.'}
 
-TECH STACK: entre 5 y 10 herramientas, tecnologías o metodologías (para cualquier perfil, no solo técnicos), con nombre, ordenadas por lo que más pide la posición. "years" solo si lo dicen las notas o el CV, o se calculan con las fechas del CV; si no, "". Lo que dijo la entrevista manda sobre el CV.
+TECH STACK: entre 5 y 10 herramientas, tecnologías o metodologías (para cualquier perfil, no solo técnicos), con nombre, ordenadas por lo que más pide la posición. "years" solo si el texto liga ESA herramienta con una cantidad de años o con el período de un trabajo donde la usó; si aparece sin período propio, "" (no repitas el mismo número de años en todas). Lo que dijo la entrevista manda sobre el CV.
 
 GAPS: 2 a 3 gaps REALES entre el candidato y la posición, cada uno con una "pregunta" concreta para que el cliente la haga en su entrevista.
 
@@ -196,6 +196,7 @@ Estructura exacta de la respuesta:
  "criterios": [{"n": 1, "veredicto": "cumple|parcial|no|sin_dato", "cita": "texto textual o ''", "fuente": "notas|cv|scorecard|''", "comentario": "máx. 140 caracteres"}],
  "techStack": [{"tool": "string", "years": "string", "fuente": "notas|cv"}],
  "ingles": "nivel de inglés dicho en notas/CV, o ''",
+ "datos": {"motivoCambio": "por qué busca cambiar, con sus palabras y breve, o '' si no se habló", "vacaciones": "vacaciones ya agendadas, o '' si no se habló", "otrosProcesos": "si | no | '' (si no se habló)"},
  "porQueIdeal": "2 a 4 líneas, o '' si no hay base",
  "gaps": [{"title": "string", "detail": "string", "pregunta": "string"}],
  "fitCultural": "${e.cultura.hay ? '3 a 5 líneas con evidencia concreta, o \\"No hay suficiente información para evaluar fit cultural\\"' : ''}",
@@ -228,6 +229,11 @@ function limpiarIA(raw) {
       .filter(t => t && str(t.tool)).slice(0, 10)
       .map(t => ({ tool: str(t.tool, 60), years: str(t.years, 30).replace(/estimad[oa]s?/gi, '').trim(), fuente: t.fuente === 'cv' ? 'cv' : 'notas' })),
     ingles: str(r.ingles, 120),
+    datos: {
+      motivoCambio: str(r.datos?.motivoCambio, 400),
+      vacaciones: str(r.datos?.vacaciones, 200),
+      otrosProcesos: ['si', 'no'].includes(str(r.datos?.otrosProcesos, 5).toLowerCase()) ? str(r.datos.otrosProcesos, 5).toLowerCase() : '',
+    },
     porQueIdeal: str(r.porQueIdeal),
     gaps: (Array.isArray(r.gaps) ? r.gaps : []).filter(g => g && str(g.title)).slice(0, 3)
       .map(g => ({ title: str(g.title, 140), detail: str(g.detail, 600), pregunta: str(g.pregunta, 300) })),
@@ -274,12 +280,32 @@ const buscarRespuesta = (scorecard, regex) => {
   return typeof v === 'string' ? v.trim() : '';
 };
 
-function armarEncabezado({ scorecard, posicion, candidato }) {
+// Sueldos viejos escritos como texto ("USD 4.500", "$2.000.000 brutos mensuales"): se
+// leen solo para poder comparar con la banda. El texto que se muestra no cambia.
+// Se descartan números chicos (años, "13 y 14") y los casos sin moneda clara.
+function sueldoDeTextoViejo(texto) {
+  const t = String(texto || '').toLowerCase();
+  const montos = montosDeTexto(t).filter(n => n >= 100);
+  if (!montos.length) return null;
+  const usd = /usd|u\$s|us\$|d[oó]lar/.test(t);
+  const ars = !usd && /\$|ars|peso/.test(t);
+  if (!usd && !ars) return null;
+  const hora = /por hora|\/\s*h\b|\bhora\b/.test(t);
+  return { monto: String(Math.max(...montos)), moneda: usd ? 'USD' : 'ARS', periodo: hora ? 'hora' : 'mensual' };
+}
+
+function armarEncabezado({ scorecard, posicion, candidato, datosIA }) {
   const o = scorecard?.obligatorio || {};
   const n = o.salario_num || {};
   const visible = n.visible !== false;
-  const sueldo = n.monto ? { monto: String(n.monto), moneda: n.moneda || '', periodo: n.periodo || '' } : null;
+  const sueldo = n.monto
+    ? { monto: String(n.monto), moneda: n.moneda || '', periodo: n.periodo || '' }
+    : sueldoDeTextoViejo(o.salario);
   const banda = parsearBanda(posicion.salary_band, posicion.salary_currency);
+  const ia = datosIA || {};
+  const motivo = (o.motivo_cambio || '').trim();
+  const vac = (o.vacaciones || '').trim();
+  const otros = o.otros_procesos === 'si' || o.otros_procesos === 'no' ? o.otros_procesos : '';
   return {
     ubicacion: candidato.location || '',
     modalidad: posicion.modality || '',
@@ -289,9 +315,16 @@ function armarEncabezado({ scorecard, posicion, candidato }) {
       comparacion: visible ? compararConBanda(sueldo, banda) : null,
     },
     disponibilidad: buscarRespuesta(scorecard, /disponibilidad/i) || 'a confirmar',
-    vacaciones: (o.vacaciones || '').trim(),
-    motivoCambio: (o.motivo_cambio || '').trim(),
-    otrosProcesos: o.otros_procesos === 'si' || o.otros_procesos === 'no' ? o.otros_procesos : '',
+    // Lo que la recruiter cargó en el scorecard manda; si falta, se toma de las notas
+    // y se marca de dónde salió para que lo revise.
+    vacaciones: vac || ia.vacaciones || '',
+    motivoCambio: motivo || ia.motivoCambio || '',
+    otrosProcesos: otros || ia.otrosProcesos || '',
+    origen: {
+      vacaciones: vac ? 'scorecard' : ia.vacaciones ? 'notas' : '',
+      motivoCambio: motivo ? 'scorecard' : ia.motivoCambio ? 'notas' : '',
+      otrosProcesos: otros ? 'scorecard' : ia.otrosProcesos ? 'notas' : '',
+    },
   };
 }
 
@@ -359,7 +392,7 @@ function ensamblarInforme({ entrada, ia: iaCruda, fuentes }) {
   const criteriosJuzgados = juzgarCriterios(entrada.criterios, ia, fuentes);
   const ranking = { ...calcularRanking(criteriosJuzgados), criterios: criteriosJuzgados };
   const recomend = recomendacion(ranking);
-  const header = armarEncabezado(entrada);
+  const header = armarEncabezado({ ...entrada, datosIA: ia.datos });
   const sinNotas = !entrada.notasTexto;
   let story = ia.storytelling.slice(0, MAX_STORYTELLING);
   if (sinNotas && story && !/sin entrevista previa/i.test(story)) story = ('Nota: este perfil se armó solo con el CV, sin entrevista previa. ' + story).slice(0, MAX_STORYTELLING);
@@ -393,6 +426,6 @@ function ensamblarInforme({ entrada, ia: iaCruda, fuentes }) {
 module.exports = {
   MAX_NOTAS, MAX_CV, MAX_JD_RESPALDO, MAX_STORYTELLING, REC, PROHIBIDAS,
   normalizar, citaExiste, recortarMedio, juntarNotasCandidato, criteriosDeJD,
-  parsearBanda, compararConBanda, calcularRanking, recomendacion,
+  parsearBanda, compararConBanda, sueldoDeTextoViejo, calcularRanking, recomendacion,
   serializarScorecard, costoAprox, construirPrompt, limpiarIA, juzgarCriterios, armarEncabezado, chequeoCalidad, ensamblarInforme,
 };
